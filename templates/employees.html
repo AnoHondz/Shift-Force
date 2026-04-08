@@ -1,159 +1,88 @@
-{% extends 'base.html' %}
-{% block title %}Employees · Ano Hondz Workforce Ltd{% endblock %}
+{% extends "base.html" %}
+{% block title %}Employees - Ano Hondz Workforce Ltd{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="page-title">All <span>Employees</span></div>
-    <div class="page-sub">$ SELECT * FROM employees ORDER BY id;</div>
+    <h2>Employee directory</h2>
+    <p>Search, filter, and review employee names, positions, departments, and pay rates.</p>
   </div>
-  <a href="{{ url_for('add_employee_page') }}" class="btn btn-primary">Add Employee</a>
+  {% if g.user['role'] == 'executive' %}
+    <a href="{{ url_for('employees.add_employee') }}" class="btn btn-primary">Add Employee</a>
+  {% endif %}
 </div>
-<div class="panel">
+
+<section class="card">
   <div class="panel-head">
-    <div class="panel-title">Employee Records</div>
-    <div class="search-wrap">
-      <input class="search-input" type="text" id="search-input" placeholder="Search name, email, ID..." oninput="handleSearch()" />
+    <div>
+      <h3>Search and filter</h3>
+      <p>Search by name, position, email, or department.</p>
     </div>
   </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>ID</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Salary</th><th>Actions</th></tr>
-      </thead>
-      <tbody id="emp-tbody">
-        <tr><td colspan="6"><div class="empty-state"><p>Loading...</p></div></td></tr>
-      </tbody>
-    </table>
+  <div class="panel-body">
+    <form method="get" class="field-grid">
+      <div>
+        <label for="search">Search</label>
+        <input id="search" name="search" value="{{ search }}" placeholder="Name, position, email" />
+      </div>
+      <div>
+        <label for="department_id">Department</label>
+        <select id="department_id" name="department_id">
+          <option value="">All departments</option>
+          {% for department in departments %}
+            <option value="{{ department['id'] }}" {% if selected_department == department['id']|string %}selected{% endif %}>{{ department['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="full actions">
+        <button type="submit" class="btn btn-primary">Apply Filters</button>
+        <a href="{{ url_for('employees.employee_directory') }}" class="btn btn-secondary">Clear</a>
+      </div>
+    </form>
   </div>
-</div>
-<div class="modal-overlay" id="edit-modal">
-  <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title">Edit Employee</div>
-      <button class="modal-close" onclick="closeModal('edit-modal')">×</button>
-    </div>
-    <div class="form-grid">
-      <input type="hidden" id="edit-id-val" />
-      <div class="form-group">
-        <label>First Name</label>
-        <input type="text" id="edit-first" />
-      </div>
-      <div class="form-group">
-        <label>Last Name</label>
-        <input type="text" id="edit-last" />
-      </div>
-      <div class="form-group">
-        <label>Salary (USD)</label>
-        <input type="number" id="edit-salary" step="0.01" />
-      </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="edit-email" />
-      </div>
-    </div>
-    <div class="form-actions" style="padding-bottom:24px;">
-      <button class="btn btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+</section>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Employees</h3>
+      <p>Executives can edit employee records and assign positions.</p>
     </div>
   </div>
-</div>
-<div class="modal-overlay" id="del-modal">
-  <div class="modal" style="width:380px">
-    <div class="confirm-body">
-      <div class="confirm-icon">🗑️</div>
-      <div class="modal-title">Delete Employee?</div>
-      <p class="confirm-text">This action cannot be undone.<br>Employee <strong id="del-name"></strong> will be permanently removed.</p>
-      <div class="confirm-actions">
-        <button class="btn btn-secondary" onclick="closeModal('del-modal')">Cancel</button>
-        <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+  <div class="panel-body">
+    {% if employees %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Position</th>
+              <th>Department</th>
+              <th>Email</th>
+              <th>Hourly Pay</th>
+              <th>Schedule</th>
+              {% if g.user['role'] == 'executive' %}<th>Actions</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for employee in employees %}
+              <tr>
+                <td>{{ employee.first_name }} {{ employee.last_name }}</td>
+                <td>{{ employee.job_title }}</td>
+                <td>{{ employee.department_name or 'Unassigned' }}</td>
+                <td>{{ employee.email }}</td>
+                <td>{{ employee.salary|currency }}</td>
+                <td>{{ employee.schedule }}</td>
+                {% if g.user['role'] == 'executive' %}
+                  <td><a href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}" class="btn btn-secondary">Edit</a></td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-    </div>
+    {% else %}
+      <p class="empty">No employees matched your filters.</p>
+    {% endif %}
   </div>
-</div>
-{% endblock %}
-{% block scripts %}
-<script>
-let deleteTargetId = null;
-let searchTimer = null;
-
-async function loadEmployees(search = '') {
-  const tbody = document.getElementById('emp-tbody');
-  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="loader"></div></div></td></tr>';
-  const url = search ? `/api/employees?search=${encodeURIComponent(search)}` : '/api/employees';
-  const r = await api(url);
-  if (r.status !== 'success' || !r.data.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="big-icon">🔍</div><p>${search ? 'No results found.' : 'No employees yet.'}</p></div></td></tr>`;
-    return;
-  }
-  tbody.innerHTML = r.data.map(e => `
-    <tr>
-      <td><span class="badge badge-id"># ${e.id}</span></td>
-      <td>${e.first_name}</td>
-      <td>${e.last_name}</td>
-      <td class="mono">${e.email}</td>
-      <td><span class="badge badge-sal">${fmt(e.salary)}</span></td>
-      <td>
-        <div class="actions">
-          <button class="btn-icon edit" title="Edit" onclick='openEdit(${JSON.stringify(e)})'>✏️</button>
-          <button class="btn-icon delete" title="Delete" onclick="openDelete(${e.id}, '${e.first_name} ${e.last_name}')">🗑</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function handleSearch() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    loadEmployees(document.getElementById('search-input').value.trim());
-  }, 300);
-}
-
-function openEdit(emp) {
-  document.getElementById('edit-id-val').value = emp.id;
-  document.getElementById('edit-first').value = emp.first_name;
-  document.getElementById('edit-last').value = emp.last_name;
-  document.getElementById('edit-salary').value = emp.salary;
-  document.getElementById('edit-email').value = emp.email;
-  openModal('edit-modal');
-}
-
-async function saveEdit() {
-  const id = document.getElementById('edit-id-val').value;
-  const first = document.getElementById('edit-first').value.trim();
-  const last = document.getElementById('edit-last').value.trim();
-  const salary = document.getElementById('edit-salary').value.trim();
-  const email = document.getElementById('edit-email').value.trim();
-  const r = await api(`/api/employees/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify({ first_name: first, last_name: last, salary, email }),
-  });
-  if (r.status === 'success') {
-    toast(r.message);
-    closeModal('edit-modal');
-    loadEmployees(document.getElementById('search-input').value.trim());
-  } else {
-    toast(r.message, 'error');
-  }
-}
-
-function openDelete(id, name) {
-  deleteTargetId = id;
-  document.getElementById('del-name').textContent = name;
-  openModal('del-modal');
-}
-
-async function confirmDelete() {
-  const r = await api(`/api/employees/${deleteTargetId}`, { method: 'DELETE' });
-  if (r.status === 'success') {
-    toast(r.message);
-    closeModal('del-modal');
-    loadEmployees(document.getElementById('search-input').value.trim());
-  } else {
-    toast(r.message, 'error');
-  }
-}
-
-loadEmployees();
-</script>
+</section>
 {% endblock %}

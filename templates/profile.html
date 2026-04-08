@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}My Profile - Ano Hondz Workforce Ltd{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>My profile</h2>
+    <p>Update your personal details, email, phone, and work schedule.</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Account summary</h3>
+      <p>Your role determines what you can edit and access.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="grid" style="gap:10px;">
+      <p><strong>Username:</strong> {{ g.user['username'] }}</p>
+      <p><strong>Role:</strong> {{ g.user['role'].title() }}</p>
+      {% if employee %}
+        <p><strong>Position:</strong> {{ employee.job_title }}</p>
+        <p><strong>Department:</strong> {{ employee.department_name or 'Unassigned' }}</p>
+        <p><strong>Hourly Pay:</strong> {{ employee.salary|currency }}</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if employee %}
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Personal information</h3>
+      <p>Employees can maintain their own contact details and work schedule.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <form method="post" class="grid">
+      <div class="field-grid">
+        <div>
+          <label for="first_name">First Name</label>
+          <input id="first_name" name="first_name" value="{{ employee.first_name }}" required />
+        </div>
+        <div>
+          <label for="last_name">Last Name</label>
+          <input id="last_name" name="last_name" value="{{ employee.last_name }}" required />
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" value="{{ employee.email }}" required />
+        </div>
+        <div>
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" value="{{ employee.phone }}" />
+        </div>
+        <div class="full">
+          <label for="address">Address</label>
+          <input id="address" name="address" value="{{ employee.address }}" />
+        </div>
+        <div class="full">
+          <label for="schedule">Work Schedule</label>
+          <input id="schedule" name="schedule" value="{{ employee.schedule }}" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save Profile</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% else %}
+<section class="card">
+  <div class="panel-body">
+    <p class="empty">This account is not linked to an employee profile yet.</p>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

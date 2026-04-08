@@ -1,79 +1,164 @@
-{% extends 'base.html' %}
-{% block title %}Dashboard · Ano Hondz Workforce Ltd{% endblock %}
+{% extends "base.html" %}
+{% block title %}Dashboard - Ano Hondz Workforce Ltd{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="page-title">Good day <span>Overview</span></div>
-    <div class="page-sub">Ano Hondz Workforce Ltd employee overview</div>
+    <h2>{% if g.user['role'] == 'executive' %}Executive dashboard{% else %}Employee dashboard{% endif %}</h2>
+    <p>
+      {% if g.user['role'] == 'executive' %}
+        Review employees, manage pay rates, monitor worked hours, and export reports.
+      {% else %}
+        Review your schedule, logged hours, pay totals, and the employee directory.
+      {% endif %}
+    </p>
   </div>
+  {% if g.user['role'] == 'executive' %}
+    <a href="{{ url_for('employees.add_employee') }}" class="btn btn-primary">Add Employee</a>
+  {% else %}
+    <a href="{{ url_for('employees.hours') }}" class="btn btn-primary">Log Hours</a>
+  {% endif %}
 </div>
-<div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-label">Total Employees</div>
-    <div class="stat-value accent" id="stat-total">-</div>
+
+{% if g.user['role'] == 'executive' %}
+  <div class="grid stats-grid">
+    <div class="card stat-card">
+      <div class="stat-label">Employees</div>
+      <div class="stat-value">{{ stats.employee_count }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Average Hourly Pay</div>
+      <div class="stat-value">{{ stats.average_rate|currency }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Week Hours</div>
+      <div class="stat-value">{{ stats.week_total_hours|hours }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Week Payroll</div>
+      <div class="stat-value">{{ stats.week_total_pay|currency }}</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-label">Avg. Salary</div>
-    <div class="stat-value green" id="stat-avg">-</div>
+{% else %}
+  <div class="grid stats-grid">
+    <div class="card stat-card">
+      <div class="stat-label">Hourly Pay</div>
+      <div class="stat-value">{{ my_profile['salary']|currency if my_profile else '$0.00' }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Logged Hours</div>
+      <div class="stat-value">{{ my_summary.hours|hours }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Overtime Hours</div>
+      <div class="stat-value">{{ my_summary.overtime_hours|hours }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Total Pay</div>
+      <div class="stat-value">{{ my_summary.total_pay|currency }}</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-label">Highest Salary</div>
-    <div class="stat-value yellow" id="stat-max">-</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Lowest Salary</div>
-    <div class="stat-value accent2" id="stat-min">-</div>
-  </div>
+{% endif %}
+
+<div class="split">
+  <section class="card">
+    <div class="panel-head">
+      <div>
+        <h3>{% if g.user['role'] == 'executive' %}Recent hours logs{% else %}Your recent hours logs{% endif %}</h3>
+        <p>Hours, overtime, and pay calculations appear here.</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if recent_logs %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {% if g.user['role'] == 'executive' %}<th>Employee</th>{% endif %}
+                <th>Date</th>
+                <th>Hours</th>
+                <th>Overtime</th>
+                <th>Total Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in recent_logs %}
+                <tr>
+                  {% if g.user['role'] == 'executive' %}
+                    <td>{{ log.first_name }} {{ log.last_name }}</td>
+                  {% endif %}
+                  <td>{{ log.work_date }}</td>
+                  <td>{{ log.hours_worked|hours }}</td>
+                  <td>{{ log.overtime_hours|hours }}</td>
+                  <td>{{ log.total_pay|currency }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty">No hours logged yet.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="panel-head">
+      <div>
+        <h3>{% if g.user['role'] == 'executive' %}Quick notes{% else %}My schedule{% endif %}</h3>
+        <p>{% if g.user['role'] == 'executive' %}Built-in workforce controls for local testing.{% else %}Your assigned working schedule and profile snapshot.{% endif %}</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if g.user['role'] == 'executive' %}
+        <div class="grid" style="gap:12px;">
+          <span class="badge">Executives can add and edit employees</span>
+          <span class="badge">Reports include weekly and monthly payroll totals</span>
+          <span class="badge">CSV export is available from the reports page</span>
+        </div>
+      {% elif my_profile %}
+        <div class="grid" style="gap:10px;">
+          <p><strong>Role:</strong> {{ my_profile.job_title }}</p>
+          <p><strong>Department:</strong> {{ my_profile.department_name or 'Unassigned' }}</p>
+          <p><strong>Schedule:</strong> {{ my_profile.schedule }}</p>
+          <p><strong>Overtime rate:</strong> {{ my_profile.overtime_rate }}x</p>
+        </div>
+      {% else %}
+        <p class="empty">Your account is not linked to an employee profile yet.</p>
+      {% endif %}
+    </div>
+  </section>
 </div>
-<div class="panel">
+
+<section class="card">
   <div class="panel-head">
-    <div class="panel-title">Recent Employees</div>
-    <a href="{{ url_for('employees_page') }}" class="btn btn-secondary">View All →</a>
+    <div>
+      <h3>Employee directory snapshot</h3>
+      <p>All signed-in users can view the current employee directory.</p>
+    </div>
+    <a href="{{ url_for('employees.employee_directory') }}" class="btn btn-secondary">Open Directory</a>
   </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>ID</th><th>Name</th><th>Email</th><th>Salary</th></tr>
-      </thead>
-      <tbody id="dash-tbody">
-        <tr><td colspan="4"><div class="empty-state"><p>Loading...</p></div></td></tr>
-      </tbody>
-    </table>
+  <div class="panel-body">
+    {% if employees %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Position</th><th>Department</th><th>Hourly Pay</th></tr>
+          </thead>
+          <tbody>
+            {% for employee in employees %}
+              <tr>
+                <td>{{ employee.first_name }} {{ employee.last_name }}</td>
+                <td>{{ employee.job_title }}</td>
+                <td>{{ employee.department_name or 'Unassigned' }}</td>
+                <td>{{ employee.salary|currency }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">No employees have been added yet.</p>
+    {% endif %}
   </div>
-</div>
-{% endblock %}
-{% block scripts %}
-<script>
-async function loadStats() {
-  const r = await api('/api/stats');
-  if (r.status !== 'success') return;
-  const d = r.data;
-  document.getElementById('stat-total').textContent = d.total;
-  document.getElementById('stat-avg').textContent = fmt(d.avg_salary);
-  document.getElementById('stat-max').textContent = fmt(d.max_salary);
-  document.getElementById('stat-min').textContent = fmt(d.min_salary);
-}
-
-async function loadRecentEmployees() {
-  const tbody = document.getElementById('dash-tbody');
-  tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="loader"></div></div></td></tr>';
-  const r = await api('/api/employees');
-  if (r.status !== 'success' || !r.data.length) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="big-icon">🔍</div><p>No employees yet.</p></div></td></tr>';
-    return;
-  }
-  const rows = r.data.slice(0, 5);
-  tbody.innerHTML = rows.map(e => `
-    <tr>
-      <td><span class="badge badge-id"># ${e.id}</span></td>
-      <td>${e.first_name} ${e.last_name}</td>
-      <td class="mono">${e.email}</td>
-      <td><span class="badge badge-sal">${fmt(e.salary)}</span></td>
-    </tr>
-  `).join('');
-}
-
-loadStats();
-loadRecentEmployees();
-</script>
+</section>
 {% endblock %}

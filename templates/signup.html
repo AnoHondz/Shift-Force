@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Sign Up - Ano Hondz Workforce Ltd{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Create a new account.</h2>
+    <p>Employees can sign up directly. Executive signup is protected with an invite code for local testing.</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Account Registration</h3>
+      <p>Role-based signup links employee users to their profile and keeps executive access protected.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <form method="post" class="grid">
+      <div class="field-grid">
+        <div>
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required />
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" minlength="8" required />
+        </div>
+        <div>
+          <label for="role">Role</label>
+          <select id="role" name="role" onchange="toggleRoleFields()">
+            <option value="employee">Employee</option>
+            <option value="executive">Executive</option>
+          </select>
+        </div>
+        <div id="invite-field" style="display:none;">
+          <label for="invite_code">Executive Invite Code</label>
+          <input id="invite_code" name="invite_code" type="text" />
+        </div>
+        <div>
+          <label for="first_name">First Name</label>
+          <input id="first_name" name="first_name" type="text" />
+        </div>
+        <div>
+          <label for="last_name">Last Name</label>
+          <input id="last_name" name="last_name" type="text" />
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" />
+        </div>
+        <div>
+          <label for="job_title">Position</label>
+          <input id="job_title" name="job_title" type="text" placeholder="Employee or Analyst" />
+        </div>
+        <div>
+          <label for="department_id">Department</label>
+          <select id="department_id" name="department_id">
+            <option value="">Unassigned</option>
+            {% for department in departments %}
+              <option value="{{ department['id'] }}">{{ department['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Create Account</button>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">Back to Login</a>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+  function toggleRoleFields() {
+    const isExecutive = document.getElementById("role").value === "executive";
+    document.getElementById("invite-field").style.display = isExecutive ? "block" : "none";
+  }
+  toggleRoleFields();
+</script>
+{% endblock %}

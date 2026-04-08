@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Reports - Ano Hondz Workforce Ltd{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Executive reports</h2>
+    <p>Weekly and monthly payroll summaries, overtime totals, and recent pay-rate changes.</p>
+  </div>
+  <div class="toolbar">
+    <a href="{{ url_for('reports.export_csv', period='weekly') }}" class="btn btn-primary">Export Weekly CSV</a>
+    <a href="{{ url_for('reports.export_csv', period='monthly') }}" class="btn btn-secondary">Export Monthly CSV</a>
+  </div>
+</div>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Weekly report</h3>
+      <p>{{ weekly_start }} to {{ weekly_end }}</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hourly Pay</th><th>Regular Hours</th><th>Overtime Hours</th><th>Total Pay</th></tr>
+        </thead>
+        <tbody>
+          {% for row in weekly_rows %}
+            <tr>
+              <td>{{ row.first_name }} {{ row.last_name }}</td>
+              <td>{{ row.job_title }}</td>
+              <td>{{ row.department_name }}</td>
+              <td>{{ row.salary|currency }}</td>
+              <td>{{ row.regular_hours|hours }}</td>
+              <td>{{ row.overtime_hours|hours }}</td>
+              <td>{{ row.total_pay|currency }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Monthly report</h3>
+      <p>{{ monthly_start }} to {{ monthly_end }}</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hourly Pay</th><th>Regular Hours</th><th>Overtime Hours</th><th>Total Pay</th></tr>
+        </thead>
+        <tbody>
+          {% for row in monthly_rows %}
+            <tr>
+              <td>{{ row.first_name }} {{ row.last_name }}</td>
+              <td>{{ row.job_title }}</td>
+              <td>{{ row.department_name }}</td>
+              <td>{{ row.salary|currency }}</td>
+              <td>{{ row.regular_hours|hours }}</td>
+              <td>{{ row.overtime_hours|hours }}</td>
+              <td>{{ row.total_pay|currency }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="panel-head">
+    <div>
+      <h3>Recent pay-rate changes</h3>
+      <p>Salary history is recorded whenever an executive updates hourly pay.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    {% if recent_salary_changes %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Changed At</th><th>Employee</th><th>Old Pay</th><th>New Pay</th></tr>
+          </thead>
+          <tbody>
+            {% for row in recent_salary_changes %}
+              <tr>
+                <td>{{ row.changed_at }}</td>
+                <td>{{ row.first_name }} {{ row.last_name }}</td>
+                <td>{{ row.old_salary|currency }}</td>
+                <td>{{ row.new_salary|currency }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">No pay changes have been recorded yet.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
