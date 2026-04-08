@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Add Employee · Ano Hondz Workforce Ltd{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Add <span>Employee</span></div>
+    <div class="page-sub">$ INSERT INTO employees VALUES (...);</div>
+  </div>
+</div>
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">New Employee Details</div>
+  </div>
+  <form id="add-employee-form" onsubmit="addEmployee(event)">
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="add-id">Employee ID</label>
+        <input type="number" id="add-id" placeholder="e.g. 101" min="1" required />
+      </div>
+      <div class="form-group">
+        <label for="add-salary">Salary (USD)</label>
+        <input type="number" id="add-salary" placeholder="e.g. 85000" min="0" step="0.01" required />
+      </div>
+      <div class="form-group">
+        <label for="add-first">First Name</label>
+        <input type="text" id="add-first" placeholder="Alice" required />
+      </div>
+      <div class="form-group">
+        <label for="add-last">Last Name</label>
+        <input type="text" id="add-last" placeholder="Johnson" required />
+      </div>
+      <div class="form-group full">
+        <label for="add-email">Email Address</label>
+        <input type="email" id="add-email" placeholder="alice@company.com" required />
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" type="button" onclick="resetAddForm()">Clear</button>
+      <button class="btn btn-primary" type="submit">Add Employee</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function resetAddForm() {
+  ['add-id', 'add-first', 'add-last', 'add-salary', 'add-email'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+}
+
+async function addEmployee(event) {
+  if (event) event.preventDefault();
+
+  const id = document.getElementById('add-id').value.trim();
+  const first = document.getElementById('add-first').value.trim();
+  const last = document.getElementById('add-last').value.trim();
+  const salary = document.getElementById('add-salary').value.trim();
+  const email = document.getElementById('add-email').value.trim();
+
+  if (!id || !first || !last || !salary || !email) {
+    toast('Please fill in all fields.', 'error');
+    return;
+  }
+
+  try {
+    const r = await api('/api/employees', {
+      method: 'POST',
+      body: JSON.stringify({ id, first_name: first, last_name: last, salary, email }),
+    });
+
+    if (r.status === 'success') {
+      toast(r.message);
+      resetAddForm();
+      window.location.href = "{{ url_for('employees_page') }}";
+      return;
+    }
+
+    toast(r.message || 'Unable to save employee.', 'error');
+  } catch (error) {
+    toast('Unable to save employee right now. Please try again.', 'error');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EMS · Employee Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ── Reset & Tokens ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0a0a0f;
+  --surface:  #12121a;
+  --card:     #1a1a26;
+  --border:   #2a2a3e;
+  --accent:   #7c6aff;
+  --accent2:  #ff6a9b;
+  --green:    #3dffc0;
+  --yellow:   #ffd166;
+  --text:     #e8e8f0;
+  --muted:    #8888aa;
+  --radius:   12px;
+  --mono:     'DM Mono', monospace;
+  --sans:     'Syne', sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Grid noise background ───────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: .25;
+  pointer-events: none;
+}
+
+/* ── Layout ──────────────────────────────────────────────────── */
+.shell { position: relative; z-index: 1; display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+aside {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 32px 24px;
+  display: flex; flex-direction: column; gap: 40px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-mark {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 18px; color: #fff; letter-spacing: -1px;
+}
+.logo-text { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+.logo-text span { color: var(--accent); }
+
+nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-label { font-size: 10px; font-weight: 600; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; padding-left: 12px; }
+
+.nav-btn {
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  color: var(--muted); font-family: var(--sans); font-size: 14px; font-weight: 600;
+  transition: all .2s; text-align: left; width: 100%;
+}
+.nav-btn:hover { background: var(--card); color: var(--text); }
+.nav-btn.active { background: rgba(124,106,255,.15); color: var(--accent); }
+.nav-btn .icon { font-size: 18px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 12px;
+  border-radius: var(--radius);
+  background: rgba(124,106,255,.08);
+  border: 1px solid rgba(124,106,255,.2);
+  font-size: 12px; color: var(--muted); line-height: 1.6;
+}
+.sidebar-footer strong { color: var(--accent); display: block; margin-bottom: 4px; }
+
+/* ── Main ────────────────────────────────────────────────────── */
+main { padding: 40px 48px; display: flex; flex-direction: column; gap: 32px; }
+
+/* ── Header ──────────────────────────────────────────────────── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-title { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+.page-title span { color: var(--accent); }
+.page-sub { color: var(--muted); font-size: 14px; margin-top: 4px; font-family: var(--mono); }
+
+/* ── Toast ───────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 32px; right: 32px; z-index: 999;
+  padding: 14px 20px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 600;
+  transform: translateY(80px); opacity: 0;
+  transition: all .35s cubic-bezier(.34,1.56,.64,1);
+  max-width: 320px;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { background: rgba(61,255,192,.15); border: 1px solid var(--green); color: var(--green); }
+#toast.error   { background: rgba(255,106,155,.15); border: 1px solid var(--accent2); color: var(--accent2); }
+
+/* ── Stat cards ─────────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative; overflow: hidden;
+  transition: transform .2s, border-color .2s;
+}
+.stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.stat-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(124,106,255,.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+.stat-label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.stat-value { font-size: 30px; font-weight: 800; letter-spacing: -1px; }
+.stat-value.accent  { color: var(--accent); }
+.stat-value.green   { color: var(--green); }
+.stat-value.yellow  { color: var(--yellow); }
+.stat-value.accent2 { color: var(--accent2); }
+.stat-icon { position: absolute; top: 20px; right: 20px; font-size: 26px; opacity: .3; }
+
+/* ── Panel ───────────────────────────────────────────────────── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.panel-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.panel-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+
+/* ── Search ──────────────────────────────────────────────────── */
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 9px 14px 9px 38px;
+  width: 240px;
+  outline: none;
+  transition: border-color .2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+
+/* ── Table ───────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  padding: 12px 20px; text-align: left;
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+tbody tr {
+  border-bottom: 1px solid rgba(42,42,62,.6);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(124,106,255,.05); }
+tbody tr:last-child { border-bottom: none; }
+td {
+  padding: 14px 20px;
+  font-size: 14px; vertical-align: middle;
+}
+td.mono { font-family: var(--mono); font-size: 13px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+}
+.badge-id   { background: rgba(124,106,255,.12); color: var(--accent); border: 1px solid rgba(124,106,255,.2); }
+.badge-sal  { background: rgba(61,255,192,.08);  color: var(--green);  border: 1px solid rgba(61,255,192,.2); }
+
+.actions { display: flex; gap: 6px; }
+.btn-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: var(--muted);
+  transition: all .2s;
+}
+.btn-icon:hover.edit   { border-color: var(--accent); color: var(--accent); background: rgba(124,106,255,.12); }
+.btn-icon:hover.delete { border-color: var(--accent2); color: var(--accent2); background: rgba(255,106,155,.12); }
+
+.empty-state {
+  padding: 60px 20px; text-align: center; color: var(--muted);
+}
+.empty-state .big-icon { font-size: 48px; opacity: .3; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* ── Form panel ─────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; padding: 24px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full { grid-column: 1 / -1; }
+label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+
+input[type=text], input[type=email], input[type=number] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124,106,255,.12);
+}
+input::placeholder { color: var(--muted); }
+
+.form-actions {
+  padding: 0 24px 24px;
+  display: flex; gap: 12px; justify-content: flex-end;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.btn {
+  padding: 10px 20px; border-radius: 8px;
+  font-family: var(--sans); font-size: 14px; font-weight: 700;
+  cursor: pointer; border: none; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary {
+  background: var(--accent); color: #fff;
+}
+.btn-primary:hover { background: #9580ff; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,106,255,.4); }
+.btn-secondary {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger {
+  background: rgba(255,106,155,.15); color: var(--accent2);
+  border: 1px solid rgba(255,106,155,.3);
+}
+.btn-danger:hover { background: rgba(255,106,155,.25); }
+
+/* ── Modal ───────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(10,10,15,.8); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 480px; max-width: 95vw;
+  transform: translateY(20px) scale(.97);
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.modal-overlay.open .modal { transform: translateY(0) scale(1); }
+.modal-head {
+  padding: 24px 24px 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.modal-close {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: none; border: 1px solid var(--border);
+  cursor: pointer; color: var(--muted); font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.modal-close:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Confirm modal ───────────────────────────────────────────── */
+.confirm-body { padding: 24px; text-align: center; }
+.confirm-icon { font-size: 48px; margin-bottom: 12px; }
+.confirm-text { color: var(--muted); font-size: 14px; margin: 8px 0 24px; }
+.confirm-actions { display: flex; gap: 12px; justify-content: center; }
+
+/* ── View section switching ──────────────────────────────────── */
+.view { display: none; }
+.view.active { display: flex; flex-direction: column; gap: 32px; }
+
+/* ── Loader ──────────────────────────────────────────────────── */
+.loader {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  aside { height: auto; position: relative; padding: 20px; }
+  aside nav { flex-direction: row; flex-wrap: wrap; }
+  main { padding: 24px 20px; }
+  .stats-grid { grid-template-columns: repeat(2,1fr); }
+  .form-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ── Sidebar ── -->
+  <aside>
+    <div class="logo">
+      <div class="logo-mark">EM</div>
+      <div class="logo-text">E<span>M</span>S</div>
+    </div>
+
+    <nav>
+      <div class="nav-label">Menu</div>
+      <button class="nav-btn active" onclick="showView('dashboard')">
+        <span class="icon">⬡</span> Dashboard
+      </button>
+      <button class="nav-btn" onclick="showView('employees')">
+        <span class="icon">◈</span> Employees
+      </button>
+      <button class="nav-btn" onclick="showView('add')">
+        <span class="icon">⊕</span> Add Employee
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <strong>🗄 MySQL + Flask</strong>
+      Full-stack CRUD system.<br>Python · MySQL · REST API
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard" class="view active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Good day 👋 <span>Overview</span></div>
+          <div class="page-sub">$ SELECT * FROM company.employees;</div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Employees</div>
+          <div class="stat-value accent" id="stat-total">—</div>
+          <div class="stat-icon">👥</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg. Salary</div>
+          <div class="stat-value green" id="stat-avg">—</div>
+          <div class="stat-icon">📊</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Highest Salary</div>
+          <div class="stat-value yellow" id="stat-max">—</div>
+          <div class="stat-icon">🏆</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Lowest Salary</div>
+          <div class="stat-value accent2" id="stat-min">—</div>
+          <div class="stat-icon">📉</div>
+        </div>
+      </div>
+
+      <!-- Recent employees table on dashboard -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Recent Employees</div>
+          <button class="btn btn-secondary" onclick="showView('employees')">View All →</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Name</th><th>Email</th><th>Salary</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="dash-tbody">
+              <tr><td colspan="5"><div class="empty-state"><div class="big-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMPLOYEES VIEW -->
+    <div id="view-employees" class="view">
+      <div class="page-header">
+        <div>
+          <div class="page-title">All <span>Employees</span></div>
+          <div class="page-sub">$ SELECT * FROM employees ORDER BY id;</div>
+        </div>
+        <button class="btn btn-primary" onclick="showView('add')">⊕ Add Employee</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Employee Records</div>
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input class="search-input" type="text" id="search-input" placeholder="Search name, email, ID…" oninput="handleSearch()" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Salary</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="emp-tbody">
+              <tr><td colspan="6"><div class="empty-state"><div class="big-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD EMPLOYEE VIEW -->
+    <div id="view-add" class="view">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Add <span>Employee</span></div>
+          <div class="page-sub">$ INSERT INTO employees VALUES (…);</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">New Employee Details</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Employee ID</label>
+            <input type="number" id="add-id" placeholder="e.g. 101" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Salary (USD)</label>
+            <input type="number" id="add-salary" placeholder="e.g. 85000" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" id="add-first" placeholder="Alice" />
+          </div>
+          <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" id="add-last" placeholder="Johnson" />
+          </div>
+          <div class="form-group full">
+            <label>Email Address</label>
+            <input type="email" id="add-email" placeholder="alice@company.com" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="resetAddForm()">✕ Clear</button>
+          <button class="btn btn-primary" onclick="addEmployee()">⊕ Add Employee</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Edit Modal ── -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">✏️ Edit Employee</div>
+      <button class="modal-close" onclick="closeModal('edit-modal')">✕</button>
+    </div>
+    <div class="form-grid">
+      <input type="hidden" id="edit-id-val" />
+      <div class="form-group">
+        <label>First Name</label>
+        <input type="text" id="edit-first" />
+      </div>
+      <div class="form-group">
+        <label>Last Name</label>
+        <input type="text" id="edit-last" />
+      </div>
+      <div class="form-group">
+        <label>Salary (USD)</label>
+        <input type="number" id="edit-salary" step="0.01" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="edit-email" />
+      </div>
+    </div>
+    <div class="form-actions" style="padding-bottom:24px;">
+      <button class="btn btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div class="modal-overlay" id="del-modal">
+  <div class="modal" style="width:380px">
+    <div class="confirm-body">
+      <div class="confirm-icon">🗑️</div>
+      <div class="modal-title">Delete Employee?</div>
+      <p class="confirm-text">This action cannot be undone.<br>Employee <strong id="del-name"></strong> will be permanently removed.</p>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary" onclick="closeModal('del-modal')">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let currentView    = 'dashboard';
+let deleteTargetId = null;
+let searchTimer    = null;
+
+// ── View switching ─────────────────────────────────────────────────────
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(el => {
+    if (el.textContent.toLowerCase().includes(v)) el.classList.add('active');
+  });
+  currentView = v;
+  if (v === 'dashboard') { loadStats(); loadEmployees('dash'); }
+  if (v === 'employees') { loadEmployees('emp'); }
+}
+
+// ── API helpers ────────────────────────────────────────────────────────
+async function api(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  return res.json();
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✓ ' : '✕ ') + msg;
+  t.className = `show ${type}`;
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+// ── Format currency ────────────────────────────────────────────────────
+const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+// ── Stats ──────────────────────────────────────────────────────────────
+async function loadStats() {
+  const r = await api('/api/stats');
+  if (r.status !== 'success') return;
+  const d = r.data;
+  document.getElementById('stat-total').textContent = d.total;
+  document.getElementById('stat-avg').textContent   = fmt(d.avg_salary);
+  document.getElementById('stat-max').textContent   = fmt(d.max_salary);
+  document.getElementById('stat-min').textContent   = fmt(d.min_salary);
+}
+
+// ── Load employees ─────────────────────────────────────────────────────
+async function loadEmployees(target, search = '') {
+  const tbody = document.getElementById(target + '-tbody');
+  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="loader"></div></div></td></tr>';
+
+  const url = search ? `/api/employees?search=${encodeURIComponent(search)}` : '/api/employees';
+  const r   = await api(url);
+
+  if (r.status !== 'success' || !r.data.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="big-icon">🔍</div><p>${search ? 'No results found.' : 'No employees yet.'}</p></div></td></tr>`;
+    return;
+  }
+
+  const isDash = target === 'dash';
+  const rows   = isDash ? r.data.slice(0, 5) : r.data;
+
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td><span class="badge badge-id"># ${e.id}</span></td>
+      <td>${e.first_name}</td>
+      ${isDash ? '' : `<td>${e.last_name}</td>`}
+      <td class="mono">${e.email}</td>
+      <td><span class="badge badge-sal">${fmt(e.salary)}</span></td>
+      <td>
+        <div class="actions">
+          <button class="btn-icon edit"   title="Edit"   onclick='openEdit(${JSON.stringify(e)})'>✏️</button>
+          <button class="btn-icon delete" title="Delete" onclick="openDelete(${e.id}, '${e.first_name} ${e.last_name}')">🗑</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Search ─────────────────────────────────────────────────────────────
+function handleSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    loadEmployees('emp', document.getElementById('search-input').value.trim());
+  }, 300);
+}
+
+// ── Add employee ───────────────────────────────────────────────────────
+async function addEmployee() {
+  const id     = document.getElementById('add-id').value.trim();
+  const first  = document.getElementById('add-first').value.trim();
+  const last   = document.getElementById('add-last').value.trim();
+  const salary = document.getElementById('add-salary').value.trim();
+  const email  = document.getElementById('add-email').value.trim();
+
+  if (!id || !first || !last || !salary || !email) {
+    toast('Please fill in all fields.', 'error'); return;
+  }
+
+  const r = await api('/api/employees', {
+    method: 'POST',
+    body: JSON.stringify({ id, first_name: first, last_name: last, salary, email }),
+  });
+
+  if (r.status === 'success') {
+    toast(r.message);
+    resetAddForm();
+    showView('employees');
+    loadStats();
+  } else {
+    toast(r.message, 'error');
+  }
+}
+
+function resetAddForm() {
+  ['add-id','add-first','add-last','add-salary','add-email'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+
+// ── Edit ───────────────────────────────────────────────────────────────
+function openEdit(emp) {
+  document.getElementById('edit-id-val').value = emp.id;
+  document.getElementById('edit-first').value  = emp.first_name;
+  document.getElementById('edit-last').value   = emp.last_name;
+  document.getElementById('edit-salary').value = emp.salary;
+  document.getElementById('edit-email').value  = emp.email;
+  openModal('edit-modal');
+}
+
+async function saveEdit() {
+  const id     = document.getElementById('edit-id-val').value;
+  const first  = document.getElementById('edit-first').value.trim();
+  const last   = document.getElementById('edit-last').value.trim();
+  const salary = document.getElementById('edit-salary').value.trim();
+  const email  = document.getElementById('edit-email').value.trim();
+
+  const r = await api(`/api/employees/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ first_name: first, last_name: last, salary, email }),
+  });
+
+  if (r.status === 'success') {
+    toast(r.message);
+    closeModal('edit-modal');
+    loadEmployees(currentView === 'dashboard' ? 'dash' : 'emp');
+    loadStats();
+  } else {
+    toast(r.message, 'error');
+  }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────
+function openDelete(id, name) {
+  deleteTargetId = id;
+  document.getElementById('del-name').textContent = name;
+  openModal('del-modal');
+}
+
+async function confirmDelete() {
+  const r = await api(`/api/employees/${deleteTargetId}`, { method: 'DELETE' });
+  if (r.status === 'success') {
+    toast(r.message);
+    closeModal('del-modal');
+    const target = currentView === 'dashboard' ? 'dash' : 'emp';
+    loadEmployees(target);
+    loadStats();
+  } else {
+    toast(r.message, 'error');
+  }
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
+});
+
+// ── Init ───────────────────────────────────────────────────────────────
+loadStats();
+loadEmployees('dash');
+</script>
+</body>
+</html>

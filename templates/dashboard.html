@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · Ano Hondz Workforce Ltd{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Good day <span>Overview</span></div>
+    <div class="page-sub">Ano Hondz Workforce Ltd employee overview</div>
+  </div>
+</div>
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Employees</div>
+    <div class="stat-value accent" id="stat-total">-</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg. Salary</div>
+    <div class="stat-value green" id="stat-avg">-</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Highest Salary</div>
+    <div class="stat-value yellow" id="stat-max">-</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Lowest Salary</div>
+    <div class="stat-value accent2" id="stat-min">-</div>
+  </div>
+</div>
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Recent Employees</div>
+    <a href="{{ url_for('employees_page') }}" class="btn btn-secondary">View All →</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Email</th><th>Salary</th></tr>
+      </thead>
+      <tbody id="dash-tbody">
+        <tr><td colspan="4"><div class="empty-state"><p>Loading...</p></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadStats() {
+  const r = await api('/api/stats');
+  if (r.status !== 'success') return;
+  const d = r.data;
+  document.getElementById('stat-total').textContent = d.total;
+  document.getElementById('stat-avg').textContent = fmt(d.avg_salary);
+  document.getElementById('stat-max').textContent = fmt(d.max_salary);
+  document.getElementById('stat-min').textContent = fmt(d.min_salary);
+}
+
+async function loadRecentEmployees() {
+  const tbody = document.getElementById('dash-tbody');
+  tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="loader"></div></div></td></tr>';
+  const r = await api('/api/employees');
+  if (r.status !== 'success' || !r.data.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="big-icon">🔍</div><p>No employees yet.</p></div></td></tr>';
+    return;
+  }
+  const rows = r.data.slice(0, 5);
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td><span class="badge badge-id"># ${e.id}</span></td>
+      <td>${e.first_name} ${e.last_name}</td>
+      <td class="mono">${e.email}</td>
+      <td><span class="badge badge-sal">${fmt(e.salary)}</span></td>
+    </tr>
+  `).join('');
+}
+
+loadStats();
+loadRecentEmployees();
+</script>
+{% endblock %}
