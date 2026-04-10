@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-2">My Profile</h1>
+    <p class="text-muted">Update your contact information and schedule details.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm p-4">
+      <h2 class="h5">Account details</h2>
+      <dl class="row mt-3">
+        <dt class="col-5 text-muted">Username</dt>
+        <dd class="col-7">{{ current_user.username }}</dd>
+        <dt class="col-5 text-muted">Role</dt>
+        <dd class="col-7">{{ current_user.role.title() }}</dd>
+        {% if employee %}
+          <dt class="col-5 text-muted">Position</dt>
+          <dd class="col-7">{{ employee.job_title }}</dd>
+          <dt class="col-5 text-muted">Department</dt>
+          <dd class="col-7">{{ employee.department.name if employee.department else 'Unassigned' }}</dd>
+          <dt class="col-5 text-muted">Hourly Pay</dt>
+          <dd class="col-7">{{ employee.hourly_rate|currency }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card shadow-sm p-4">
+      <h2 class="h5">Edit personal details</h2>
+      {% if employee %}
+        <form method="post" class="row g-3 mt-3">
+          <div class="col-md-6">
+            <label class="form-label" for="first_name">First Name</label>
+            <input id="first_name" name="first_name" class="form-control" value="{{ employee.first_name }}" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="last_name">Last Name</label>
+            <input id="last_name" name="last_name" class="form-control" value="{{ employee.last_name }}" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="email">Email</label>
+            <input id="email" name="email" type="email" class="form-control" value="{{ employee.email }}" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="phone">Phone</label>
+            <input id="phone" name="phone" class="form-control" value="{{ employee.phone }}" />
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="address">Address</label>
+            <input id="address" name="address" class="form-control" value="{{ employee.address }}" />
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="schedule">Work Schedule</label>
+            <input id="schedule" name="schedule" class="form-control" value="{{ employee.schedule }}" />
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">Save Profile</button>
+          </div>
+        </form>
+      {% else %}
+        <div class="alert alert-warning">Your account is not linked to an employee profile.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

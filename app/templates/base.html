@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Employee Management{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-pprn3073KE6tl6Q5w7q4bXw4hZ+bH8h32yllm9kZI+nO7lYtE1qE0G5S5Y9a2d9v" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}" />
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="{{ url_for('employees.home') }}">Workforce Portal</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto align-items-center">
+            {% if current_user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('employees.dashboard') }}">Dashboard</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'employees' %}active{% endif %}" href="{{ url_for('employees.employee_directory') }}">Employees</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'payroll' %}active{% endif %}" href="{{ url_for('employees.payroll') }}">Payroll</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'attendance' %}active{% endif %}" href="{{ url_for('attendance.index') }}">Attendance</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'leave' %}active{% endif %}" href="{{ url_for('leave.index') }}">Leave</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'reports' %}active{% endif %}" href="{{ url_for('reports.index') }}">Reports</a>
+              </li>
+              {% if current_user.is_admin() %}
+              <li class="nav-item">
+                <a class="nav-link {% if active_page == 'audit' %}active{% endif %}" href="{{ url_for('audit.index') }}">Audit</a>
+              </li>
+              {% endif %}
+              <li class="nav-item">
+                <a class="nav-link position-relative {% if active_page == 'notifications' %}active{% endif %}" href="{{ url_for('notifications.index') }}" aria-label="Notifications">
+                  Notifications
+                  {% if unread_notification_count and unread_notification_count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ unread_notification_count }}</span>
+                  {% endif %}
+                </a>
+              </li>
+              <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ current_user.username }}</a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item" href="{{ url_for('employees.profile') }}">My Profile</a></li>
+                  <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Logout</a></li>
+                </ul>
+              </li>
+            {% else %}
+              <li class="nav-item"><a class="nav-link {% if active_page == 'login' %}active{% endif %}" href="{{ url_for('auth.login') }}">Login</a></li>
+              <li class="nav-item"><a class="nav-link {% if active_page == 'signup' %}active{% endif %}" href="{{ url_for('auth.signup') }}">Sign Up</a></li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container py-5">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-4">
+            {% for category, message in messages %}
+              {% set alert_class = 'danger' if category == 'error' else category %}
+              <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center py-4 border-top bg-white">
+      <div class="container">
+        <p class="mb-0">Employee Management System &middot; Built with Flask, SQLAlchemy, and Bootstrap.</p>
+      </div>
+    </footer>
+
+    <div id="assistant-widget" class="assistant-widget shadow-lg">
+      <button id="assistant-toggle" class="btn btn-primary assistant-button">HR Assistant</button>
+      <div id="assistant-panel" class="assistant-panel d-none">
+        <div class="assistant-header d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-0">HR Assistant</h5>
+            <p class="text-muted small mb-0">Ask about leave, payroll, attendance, or profile help.</p>
+          </div>
+          <button id="assistant-close" class="btn btn-sm btn-outline-secondary">Close</button>
+        </div>
+        <div id="assistant-messages" class="assistant-messages"></div>
+        <div class="assistant-actions my-3">
+          <button data-question="How do I submit leave?" class="btn btn-sm btn-outline-primary">How do I submit leave?</button>
+          <button data-question="Where can I see payroll?" class="btn btn-sm btn-outline-primary">Where can I see payroll?</button>
+          <button data-question="How do I update my profile?" class="btn btn-sm btn-outline-primary">How do I update my profile?</button>
+          <button data-question="Show attendance page" class="btn btn-sm btn-outline-primary">Show attendance page</button>
+        </div>
+        <div class="input-group mb-3">
+          <input id="assistant-input" type="text" class="form-control" placeholder="Ask the HR assistant..." aria-label="Assistant question" />
+          <button id="assistant-send" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-szjj8e1rQ6mVb8X8QH8e0W6rv2eTZq6kU8Hg9CT0PDeSeYYVg6ECa5kFv2Y3GgE4" crossorigin="anonymous"></script>
+    <script>
+      const assistantToggle = document.getElementById('assistant-toggle');
+      const assistantPanel = document.getElementById('assistant-panel');
+      const assistantClose = document.getElementById('assistant-close');
+      const assistantSend = document.getElementById('assistant-send');
+      const assistantInput = document.getElementById('assistant-input');
+      const assistantMessages = document.getElementById('assistant-messages');
+
+      function appendMessage(content, sender) {
+        const bubble = document.createElement('div');
+        bubble.className = `assistant-bubble assistant-bubble-${sender}`;
+        bubble.textContent = content;
+        assistantMessages.appendChild(bubble);
+        assistantMessages.scrollTop = assistantMessages.scrollHeight;
+      }
+
+      function renderQuickActions(actions) {
+        const container = document.createElement('div');
+        container.className = 'assistant-action-buttons d-flex flex-wrap gap-2';
+        actions.forEach(action => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn btn-sm btn-outline-primary';
+          button.textContent = action.label;
+          button.addEventListener('click', () => {
+            window.location.href = action.url;
+          });
+          container.appendChild(button);
+        });
+        assistantMessages.appendChild(container);
+        assistantMessages.scrollTop = assistantMessages.scrollHeight;
+      }
+
+      function submitQuestion(question) {
+        if (!question) return;
+        appendMessage(question, 'user');
+        assistantInput.value = '';
+        fetch('/assistant/api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            appendMessage(data.answer, 'assistant');
+            if (Array.isArray(data.quick_actions) && data.quick_actions.length) {
+              renderQuickActions(data.quick_actions);
+            }
+          })
+          .catch(() => appendMessage('I’m sorry, the assistant is unavailable right now.', 'assistant'));
+      }
+
+      assistantToggle.addEventListener('click', () => {
+        assistantPanel.classList.toggle('d-none');
+        if (!assistantPanel.classList.contains('d-none')) {
+          assistantInput.focus();
+        }
+      });
+
+      assistantClose.addEventListener('click', () => {
+        assistantPanel.classList.add('d-none');
+      });
+
+      assistantSend.addEventListener('click', () => {
+        submitQuestion(assistantInput.value.trim());
+      });
+
+      assistantInput.addEventListener('keypress', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          submitQuestion(assistantInput.value.trim());
+        }
+      });
+
+      document.querySelectorAll('.assistant-actions button').forEach(button => {
+        button.addEventListener('click', () => {
+          submitQuestion(button.dataset.question);
+        });
+      });
+    </script>
+  </body>
+</html>

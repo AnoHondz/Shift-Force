@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Employee Directory{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-2">Employee Directory</h1>
+    <p class="text-muted">Search team members, filter by department and role, and manage employee records.</p>
+  </div>
+  {% if current_user.is_authenticated and (current_user.is_admin() or current_user.is_manager()) %}
+    <a class="btn btn-primary" href="{{ url_for('employees.add_employee') }}">New Employee</a>
+  {% endif %}
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="search">Search</label>
+        <input class="form-control" id="search" name="search" value="{{ search }}" placeholder="Name, email, or position" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="department_id">Department</label>
+        <select class="form-select" id="department_id" name="department_id">
+          <option value="">All departments</option>
+          {% for department in departments %}
+            <option value="{{ department.id }}" {% if selected_department == department.id|string %}selected{% endif %}>{{ department.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="role">Role</label>
+        <select class="form-select" id="role" name="role">
+          <option value="">All roles</option>
+          {% for role in role_choices %}
+            <option value="{{ role }}" {% if selected_role == role %}selected{% endif %}>{{ role.title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Position</th>
+          <th>Department</th>
+          <th>Email</th>
+          <th>Hourly Pay</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if employees %}
+          {% for employee in employees %}
+            <tr>
+              <td>{{ employee.full_name() }}</td>
+              <td>{{ employee.user.role.title() if employee.user else 'Unassigned' }}</td>
+              <td>{{ employee.job_title }}</td>
+              <td>{{ employee.department.name if employee.department else 'Unassigned' }}</td>
+              <td>{{ employee.email }}</td>
+              <td>{{ employee.hourly_rate|currency }}</td>
+              <td class="text-end">
+                {% if current_user.is_authenticated and (current_user.is_admin() or current_user.is_manager()) %}
+                  <a class="btn btn-sm btn-secondary" href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}">Edit</a>
+                {% endif %}
+                {% if current_user.is_authenticated and current_user.is_admin() %}
+                  <form method="post" action="{{ url_for('employees.delete_employee', employee_id=employee.id) }}" class="d-inline-block" onsubmit="return confirm('Delete this employee?');">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted">No employees match your filters.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

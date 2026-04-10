@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-2">{{ title }}</h1>
+    <p class="text-muted">Maintain employee profiles, pay rates, and department assignments.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('employees.employee_directory') }}">Back to Directory</a>
+</div>
+
+<div class="card shadow-sm p-4">
+  <form method="post" class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label" for="first_name">First Name</label>
+      <input id="first_name" name="first_name" class="form-control" value="{{ employee.first_name if employee else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="last_name">Last Name</label>
+      <input id="last_name" name="last_name" class="form-control" value="{{ employee.last_name if employee else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="email">Email</label>
+      <input id="email" name="email" type="email" class="form-control" value="{{ employee.email if employee else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="job_title">Position</label>
+      <input id="job_title" name="job_title" class="form-control" value="{{ employee.job_title if employee else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="department_id">Department</label>
+      <select id="department_id" name="department_id" class="form-select">
+        <option value="">Unassigned</option>
+        {% for department in departments %}
+          <option value="{{ department.id }}" {% if employee and employee.department_id == department.id %}selected{% endif %}>{{ department.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="phone">Phone</label>
+      <input id="phone" name="phone" class="form-control" value="{{ employee.phone if employee else '' }}" />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="hourly_rate">Hourly Pay</label>
+      <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="0.01" class="form-control" value="{{ employee.hourly_rate if employee else '25.00' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="overtime_multiplier">Overtime Multiplier</label>
+      <input id="overtime_multiplier" name="overtime_multiplier" type="number" min="0" step="0.01" class="form-control" value="{{ employee.overtime_multiplier if employee else '1.50' }}" required />
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="schedule">Work Schedule</label>
+      <input id="schedule" name="schedule" class="form-control" value="{{ employee.schedule if employee else 'Mon-Fri 9:00 AM - 5:00 PM' }}" />
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="address">Address</label>
+      <input id="address" name="address" class="form-control" value="{{ employee.address if employee else '' }}" />
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('employees.employee_directory') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

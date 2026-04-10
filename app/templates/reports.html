@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-2">Reports</h1>
+    <p class="text-muted">Generate weekly or monthly payroll summaries and export CSV files for review.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-primary" href="{{ url_for('reports.export_csv', period='weekly') }}">Export Weekly CSV</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('reports.export_csv', period='monthly') }}">Export Monthly CSV</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+          <h2 class="h5">Weekly payroll</h2>
+          <p class="text-muted">{{ weekly_start }} to {{ weekly_end }}</p>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold">Total pay</div>
+          <div>{{ weekly_total_pay|currency }}</div>
+          <div class="text-muted small">{{ weekly_total_hours|hours }} hours</div>
+        </div>
+      </div>
+      {% if weekly_rows %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hours</th><th>Overtime</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              {% for record in weekly_rows %}
+                <tr>
+                  <td>{{ record.employee.full_name() }}</td>
+                  <td>{{ record.employee.job_title }}</td>
+                  <td>{{ record.employee.department.name if record.employee.department else 'Unassigned' }}</td>
+                  <td>{{ record.hours_worked|hours }}</td>
+                  <td>{{ record.overtime_hours|hours }}</td>
+                  <td>{{ record.total_pay|currency }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="alert alert-secondary">No weekly payroll records found.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+          <h2 class="h5">Monthly payroll</h2>
+          <p class="text-muted">{{ monthly_start }} to {{ monthly_end }}</p>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold">Total pay</div>
+          <div>{{ monthly_total_pay|currency }}</div>
+          <div class="text-muted small">{{ monthly_total_hours|hours }} hours</div>
+        </div>
+      </div>
+      {% if monthly_rows %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hours</th><th>Overtime</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              {% for record in monthly_rows %}
+                <tr>
+                  <td>{{ record.employee.full_name() }}</td>
+                  <td>{{ record.employee.job_title }}</td>
+                  <td>{{ record.employee.department.name if record.employee.department else 'Unassigned' }}</td>
+                  <td>{{ record.hours_worked|hours }}</td>
+                  <td>{{ record.overtime_hours|hours }}</td>
+                  <td>{{ record.total_pay|currency }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="alert alert-secondary">No monthly payroll records found.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

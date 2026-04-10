@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Workforce Portal{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center py-5">
+  <div class="col-xl-9">
+    <div class="card shadow-lg banner p-5">
+      <div class="row align-items-center gy-4">
+        <div class="col-lg-7">
+          <h1 class="display-6 fw-bold">Modern employee management for every organization.</h1>
+          <p class="lead text-muted">Secure authentication, role-based access, payroll calculations, leave requests, and reporting that feel professional.</p>
+          <div class="d-flex gap-2 flex-wrap mt-4">
+            <a class="btn btn-primary btn-lg" href="{{ url_for('auth.login') }}">Log In</a>
+            <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('auth.signup') }}">Create Account</a>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="card p-4 shadow-sm">
+            <h2 class="h5">Key features</h2>
+            <ul class="list-unstyled mb-0 mt-3 text-muted">
+              <li>• Role-based admin, manager, and employee access</li>
+              <li>• Employee CRUD and profile management</li>
+              <li>• Payroll calculations with overtime support</li>
+              <li>• Leave request submission and approval</li>
+              <li>• Exportable reports and weekly summaries</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
