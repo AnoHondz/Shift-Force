@@ -1,65 +1,99 @@
 {% extends "base.html" %}
+{% import "_components.html" as ui %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">{{ title }}</h1>
-    <p class="text-muted">Maintain employee profiles, pay rates, and department assignments.</p>
-  </div>
-  <a class="btn btn-outline-secondary" href="{{ url_for('employees.employee_directory') }}">Back to Directory</a>
-</div>
+{% call ui.page_header(title, 'Manage personal data, compensation, and scheduling details.') %}
+  <a class="btn btn-ghost" href="{{ url_for('employees.employee_directory') }}">Back to Directory</a>
+{% endcall %}
 
-<div class="card shadow-sm p-4">
-  <form method="post" class="row g-3">
-    <div class="col-md-6">
-      <label class="form-label" for="first_name">First Name</label>
-      <input id="first_name" name="first_name" class="form-control" value="{{ employee.first_name if employee else '' }}" required />
+<p class="section-note mb-3">Complete and consistent records improve downstream payroll, notifications, and reporting accuracy.</p>
+
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="surface-card">
+      <form method="post" class="row g-3 form-shell">
+        <div class="col-12"><h3 class="h6 mb-0">Personal Information</h3></div>
+        <div class="col-md-6">
+          <label class="form-label">First Name</label>
+          <input name="first_name" class="form-control" required value="{{ request.form.get('first_name', employee.first_name if employee else '') }}" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Last Name</label>
+          <input name="last_name" class="form-control" required value="{{ request.form.get('last_name', employee.last_name if employee else '') }}" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Email</label>
+          <input name="email" type="email" class="form-control" required value="{{ request.form.get('email', employee.email if employee else '') }}" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Phone</label>
+          <input name="phone" class="form-control" value="{{ request.form.get('phone', employee.phone if employee else '') }}" />
+        </div>
+
+        <div class="col-12 mt-2"><h3 class="h6 mb-0">Employment Details</h3></div>
+        <div class="col-md-6">
+          <label class="form-label">Job Title</label>
+          <input name="job_title" class="form-control" required value="{{ request.form.get('job_title', employee.job_title if employee else '') }}" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Department</label>
+          <select name="department_id" class="form-select">
+            <option value="">Unassigned</option>
+            {% for department in departments %}
+              {% set selected_dept = request.form.get('department_id', employee.department_id|string if employee and employee.department_id else '') %}
+              <option value="{{ department.id }}" {% if selected_dept == department.id|string %}selected{% endif %}>{{ department.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 mt-2"><h3 class="h6 mb-0">Compensation and Schedule</h3></div>
+        <div class="col-md-4">
+          <label class="form-label">Hourly Rate</label>
+          <input name="hourly_rate" type="number" step="0.01" min="0" class="form-control" value="{{ request.form.get('hourly_rate', employee.hourly_rate if employee else '25.00') }}" />
+          <div class="small text-muted mt-1">Base rate for payroll summary.</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Overtime Multiplier</label>
+          <input name="overtime_multiplier" type="number" step="0.01" min="0" class="form-control" value="{{ request.form.get('overtime_multiplier', employee.overtime_multiplier if employee else '1.50') }}" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Schedule</label>
+          <input name="schedule" class="form-control" value="{{ request.form.get('schedule', employee.schedule if employee else 'Mon-Fri 9:00 AM - 5:00 PM') }}" />
+        </div>
+
+        <div class="col-12 mt-2"><h3 class="h6 mb-0">Contact and Location</h3></div>
+        <div class="col-12">
+          <label class="form-label">Address</label>
+          <input name="address" class="form-control" value="{{ request.form.get('address', employee.address if employee else '') }}" />
+        </div>
+
+        <div class="col-12 d-flex flex-wrap gap-2 mt-3">
+          <button type="submit" class="btn btn-primary">Save Employee</button>
+          <a class="btn btn-ghost" href="{{ url_for('employees.employee_directory') }}">Cancel</a>
+          <button type="reset" class="btn btn-outline-secondary">Clear Unsaved Changes</button>
+        </div>
+      </form>
     </div>
-    <div class="col-md-6">
-      <label class="form-label" for="last_name">Last Name</label>
-      <input id="last_name" name="last_name" class="form-control" value="{{ employee.last_name if employee else '' }}" required />
+  </div>
+
+  <div class="col-xl-4">
+    <div class="surface-card mb-3">
+      <h3 class="h6">Employee Snapshot</h3>
+      <div class="d-flex align-items-center gap-2 mt-2">
+        <div class="avatar-chip">{{ (employee.first_name[0] if employee else 'N') }}{{ (employee.last_name[0] if employee else 'E') }}</div>
+        <div>
+          <div class="fw-semibold">{{ employee.full_name() if employee else 'New Employee' }}</div>
+          <div class="small text-muted">{{ employee.job_title if employee else 'Role pending' }}</div>
+        </div>
+      </div>
+      <div class="small text-muted mt-3">Tip: Add schedule and compensation values for accurate payroll and reporting output.</div>
     </div>
-    <div class="col-md-6">
-      <label class="form-label" for="email">Email</label>
-      <input id="email" name="email" type="email" class="form-control" value="{{ employee.email if employee else '' }}" required />
+
+    <div class="surface-card">
+      <h3 class="h6">Compensation History</h3>
+      <p class="small text-muted mb-1">Compensation revision tracking can be layered onto payroll history for audit readiness.</p>
+      <div class="status-badge status-pending">History placeholder enabled</div>
     </div>
-    <div class="col-md-6">
-      <label class="form-label" for="job_title">Position</label>
-      <input id="job_title" name="job_title" class="form-control" value="{{ employee.job_title if employee else '' }}" required />
-    </div>
-    <div class="col-md-6">
-      <label class="form-label" for="department_id">Department</label>
-      <select id="department_id" name="department_id" class="form-select">
-        <option value="">Unassigned</option>
-        {% for department in departments %}
-          <option value="{{ department.id }}" {% if employee and employee.department_id == department.id %}selected{% endif %}>{{ department.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-6">
-      <label class="form-label" for="phone">Phone</label>
-      <input id="phone" name="phone" class="form-control" value="{{ employee.phone if employee else '' }}" />
-    </div>
-    <div class="col-md-6">
-      <label class="form-label" for="hourly_rate">Hourly Pay</label>
-      <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="0.01" class="form-control" value="{{ employee.hourly_rate if employee else '25.00' }}" required />
-    </div>
-    <div class="col-md-6">
-      <label class="form-label" for="overtime_multiplier">Overtime Multiplier</label>
-      <input id="overtime_multiplier" name="overtime_multiplier" type="number" min="0" step="0.01" class="form-control" value="{{ employee.overtime_multiplier if employee else '1.50' }}" required />
-    </div>
-    <div class="col-12">
-      <label class="form-label" for="schedule">Work Schedule</label>
-      <input id="schedule" name="schedule" class="form-control" value="{{ employee.schedule if employee else 'Mon-Fri 9:00 AM - 5:00 PM' }}" />
-    </div>
-    <div class="col-12">
-      <label class="form-label" for="address">Address</label>
-      <input id="address" name="address" class="form-control" value="{{ employee.address if employee else '' }}" />
-    </div>
-    <div class="col-12 d-flex gap-2">
-      <button type="submit" class="btn btn-primary">Save</button>
-      <a class="btn btn-outline-secondary" href="{{ url_for('employees.employee_directory') }}">Cancel</a>
-    </div>
-  </form>
+  </div>
 </div>
 {% endblock %}

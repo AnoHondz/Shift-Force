@@ -1,41 +1,83 @@
 {% extends "base.html" %}
-{% block title %}Notifications{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}Notification Center{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Notifications</h1>
-    <p class="text-muted">Keep track of important system updates and action requests.</p>
-  </div>
+{% call ui.page_header('Notification and Approval Center', 'Review action items, alerts, and completed workflow updates.') %}
   <form method="post" action="{{ url_for('notifications.mark_all_read') }}">
-    <button type="submit" class="btn btn-outline-primary">Mark all as read</button>
+    <button type="submit" class="btn btn-ghost">Mark All Read</button>
   </form>
+{% endcall %}
+
+{% if admin_view %}
+  <div class="row g-3 mb-3">
+    <div class="col-md-6"><div class="kpi-card"><div class="kpi-label">Pending Leave</div><p class="kpi-value">{{ pending_leave }}</p></div></div>
+    <div class="col-md-6"><div class="kpi-card"><div class="kpi-label">Pending Hours</div><p class="kpi-value">{{ pending_hours }}</p></div></div>
+  </div>
+{% endif %}
+
+<div class="surface-card mb-3">
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn {% if current_view == 'all' %}btn-primary{% else %}btn-ghost{% endif %}" href="{{ url_for('notifications.index', view='all') }}">All</a>
+    {% if admin_view %}
+      <a class="btn {% if current_view == 'pending' %}btn-primary{% else %}btn-ghost{% endif %}" href="{{ url_for('notifications.index', view='pending') }}">Pending</a>
+      <a class="btn {% if current_view == 'alerts' %}btn-primary{% else %}btn-ghost{% endif %}" href="{{ url_for('notifications.index', view='alerts') }}">Alerts</a>
+    {% else %}
+      <a class="btn {% if current_view == 'unread' %}btn-primary{% else %}btn-ghost{% endif %}" href="{{ url_for('notifications.index', view='unread') }}">Unread</a>
+    {% endif %}
+  </div>
 </div>
 
-<div class="card shadow-sm p-4">
+<div class="surface-card">
   {% if notifications %}
-    <div class="list-group">
+    <div class="table-toolbar">
+      <p class="muted-meta mb-0">{{ pagination.total if pagination else notifications|length }} notifications in this view.</p>
+      <span class="meta-inline"><i class="bi bi-funnel"></i>Filter by tab to focus on actionable items</span>
+    </div>
+    <div class="list-group list-group-flush">
       {% for note in notifications %}
-        <div class="list-group-item d-flex justify-content-between align-items-start gap-3 {% if not note.is_read %}bg-light{% endif %}">
+        <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-start gap-3">
           <div>
-            <div class="fw-bold">{{ note.title }}</div>
-            <div class="text-muted small">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
-            <p class="mb-0 mt-2">{{ note.message }}</p>
-            {% if note.url %}
-              <a href="{{ note.url }}">View details</a>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="fw-semibold">{{ note.title }}</span>
+              {% if note.is_read %}
+                <span class="status-badge status-active">Read</span>
+              {% else %}
+                <span class="status-badge status-pending">Unread</span>
+              {% endif %}
+            </div>
+            <div class="small text-muted mb-1">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div>{{ note.message }}</div>
+            {% if note.url %}<a class="small" href="{{ note.url }}">Open linked item</a>{% endif %}
+          </div>
+          <div class="d-flex gap-1">
+            {% if not note.is_read %}
+              <form method="post" action="{{ url_for('notifications.mark_read', notification_id=note.id) }}"><button class="btn btn-sm btn-primary" type="submit">Mark Read</button></form>
+            {% else %}
+              <span class="small text-muted">Completed</span>
             {% endif %}
           </div>
-          <form method="post" action="{{ url_for('notifications.mark_read', notification_id=note.id) }}">
-            {% if not note.is_read %}
-              <button type="submit" class="btn btn-sm btn-primary">Mark read</button>
-            {% else %}
-              <span class="badge bg-success">Read</span>
-            {% endif %}
-          </form>
         </div>
       {% endfor %}
     </div>
   {% else %}
-    <div class="alert alert-secondary">You have no notifications.</div>
+    {{ ui.empty_state('Nothing to review right now', 'This inbox is clear for the selected filter. New alerts and approvals will appear here automatically.') }}
   {% endif %}
 </div>
+
+{% if pagination and pagination.pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} notifications)</div>
+    <nav aria-label="Notifications pagination">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('notifications.index', view=current_view, page=pagination.prev_num if pagination.has_prev else 1, per_page=per_page) }}">Previous</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">{{ pagination.page }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('notifications.index', view=current_view, page=pagination.next_num if pagination.has_next else pagination.page, per_page=per_page) }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+{% endif %}
 {% endblock %}

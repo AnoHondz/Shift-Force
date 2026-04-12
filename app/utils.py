@@ -19,3 +19,13 @@ def parse_date(value):
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def parse_positive_int(value, default=1, minimum=1, maximum=500):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    parsed = max(parsed, minimum)
+    parsed = min(parsed, maximum)
+    return parsed

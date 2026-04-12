@@ -1,51 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Leave Requests{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}Leave and Schedule{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Leave Requests</h1>
-    <p class="text-muted">Submit new requests and review pending approvals.</p>
-  </div>
-  <a class="btn btn-primary" href="{{ url_for('leave.submit') }}">Submit Request</a>
-</div>
+{% call ui.page_header('Leave and Schedule', 'Manage requests, view upcoming leave, and process approvals.') %}
+  <a class="btn btn-primary" href="{{ url_for('leave.submit') }}">Request Leave</a>
+{% endcall %}
 
-<div class="card shadow-sm p-4">
+<p class="section-note mb-3">{{ 'Review and resolve pending requests to keep scheduling coverage stable.' if current_user.has_admin_access() else 'Submit requests early for faster approvals and cleaner coverage planning.' }}</p>
+
+<div class="surface-card">
   {% if requests %}
+    <div class="table-toolbar">
+      <p class="muted-meta mb-0">{{ requests|length }} request{{ '' if requests|length == 1 else 's' }} listed.</p>
+      <span class="meta-inline"><i class="bi bi-calendar-week"></i>Sorted by most recently submitted</span>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Employee</th>
-            <th>Type</th>
-            <th>Period</th>
-            <th>Status</th>
-            <th>Submitted</th>
-            {% if current_user.is_admin() or current_user.is_manager() %}<th class="text-end">Actions</th>{% endif %}
-          </tr>
-        </thead>
+        <thead><tr><th>Employee</th><th>Type</th><th>Period</th><th>Status</th><th>Submitted</th>{% if current_user.has_admin_access() %}<th class="text-end">Actions</th>{% endif %}</tr></thead>
         <tbody>
           {% for request in requests %}
             <tr>
               <td>{{ request.employee.full_name() }}</td>
               <td>{{ request.request_type }}</td>
-              <td>{{ request.start_date }} – {{ request.end_date }}</td>
-              <td>
-                <span class="badge {% if request.status == 'Approved' %}bg-success{% elif request.status == 'Rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ request.status }}</span>
-              </td>
+              <td>{{ request.start_date }} to {{ request.end_date }}</td>
+              <td><span class="status-badge status-{{ request.status|lower }}">{{ request.status }}</span></td>
               <td>{{ request.submitted_at.strftime('%Y-%m-%d') }}</td>
-              {% if current_user.is_admin() or current_user.is_manager() %}
+              {% if current_user.has_admin_access() %}
                 <td class="text-end">
                   {% if request.status == 'Pending' %}
-                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline-block">
-                      <input type="hidden" name="action" value="approve" />
-                      <button type="submit" class="btn btn-sm btn-success">Approve</button>
-                    </form>
-                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline-block ms-1">
-                      <input type="hidden" name="action" value="reject" />
-                      <button type="submit" class="btn btn-sm btn-danger">Reject</button>
-                    </form>
+                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
+                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
                   {% else %}
-                    <span class="text-muted">Reviewed</span>
+                    <span class="small text-muted">Reviewed</span>
                   {% endif %}
                 </td>
               {% endif %}
@@ -55,7 +41,7 @@
       </table>
     </div>
   {% else %}
-    <div class="alert alert-secondary">No leave requests yet.</div>
+    {{ ui.empty_state('No leave requests yet', 'Create a request to start your approval workflow and track status updates.', 'Request leave', url_for('leave.submit')) }}
   {% endif %}
 </div>
 {% endblock %}

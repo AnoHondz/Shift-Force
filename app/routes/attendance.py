@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from ..decorators import roles_required
 from ..extensions import db
 from ..models import Attendance, Employee, Role, create_audit_log
-from ..utils import get_current_employee, parse_date
+from ..utils import get_current_employee, parse_date, parse_positive_int
 
 
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")
@@ -22,15 +22,19 @@ def index():
     end_date = request.args.get("end_date", "")
 
     employees = []
-    if current_user.is_admin() or current_user.is_manager():
+    if current_user.has_admin_access():
         employees = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
 
     if request.method == "POST":
         action = request.form.get("action")
-        if current_user.is_admin() or current_user.is_manager():
+        if current_user.has_admin_access():
             selected_employee_id = request.form.get("employee_id", "")
             if not selected_employee_id:
                 flash("Please select an employee for attendance actions.", "error")
+                return redirect(url_for("attendance.index"))
+            selected_employee_id = parse_positive_int(selected_employee_id, default=None) if selected_employee_id else None
+            if not selected_employee_id:
+                flash("Invalid employee selection.", "error")
                 return redirect(url_for("attendance.index"))
         else:
             selected_employee_id = current_user.employee_id
@@ -88,7 +92,9 @@ def index():
         attendance_query = attendance_query.filter_by(employee_id=current_user.employee_id)
     else:
         if selected_employee_id:
-            attendance_query = attendance_query.filter_by(employee_id=int(selected_employee_id))
+            selected_employee_id = parse_positive_int(selected_employee_id, default=None)
+            if selected_employee_id:
+                attendance_query = attendance_query.filter_by(employee_id=selected_employee_id)
         parsed_start = parse_date(start_date)
         parsed_end = parse_date(end_date)
         if parsed_start:
@@ -97,9 +103,12 @@ def index():
             attendance_query = attendance_query.filter(Attendance.date <= parsed_end)
 
     records = attendance_query.all()
-    total_records = Attendance.query.count() if current_user.is_admin() or current_user.is_manager() else Attendance.query.filter_by(employee_id=current_user.employee_id).count()
+    total_records = Attendance.query.count() if current_user.has_admin_access() else Attendance.query.filter_by(employee_id=current_user.employee_id).count()
     total_hours = sum(record.hours_worked for record in records if record.hours_worked)
-    active_clock_ins = Attendance.query.filter_by(clock_out_at=None).count()
+    if current_user.has_admin_access():
+        active_clock_ins = Attendance.query.filter_by(clock_out_at=None).count()
+    else:
+        active_clock_ins = Attendance.query.filter_by(employee_id=current_user.employee_id, clock_out_at=None).count()
     active_record = None
     if current_user.is_employee():
         active_record = Attendance.query.filter_by(employee_id=current_user.employee_id, clock_out_at=None).first()

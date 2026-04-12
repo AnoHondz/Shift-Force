@@ -1,106 +1,138 @@
 {% extends "base.html" %}
-{% block title %}Payroll{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}{{ page_title }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Payroll</h1>
-    <p class="text-muted">Enter worked hours and review calculated regular pay, overtime, and totals.</p>
-  </div>
-  {% if current_user.is_authenticated %}
-    <a class="btn btn-primary" href="{{ url_for('leave.index') }}">View Leave</a>
+{% call ui.page_header('Hours and Payroll', 'Review, approve, and export timesheets.' if admin_view else 'Log hours and monitor pay estimates.') %}
+  {% if admin_view %}
+    <a class="btn btn-ghost" href="{{ url_for('reports.export_csv', period='weekly') }}">Export CSV</a>
   {% endif %}
+{% endcall %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Total Hours</div><p class="kpi-value">{{ summary.hours|hours }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Regular Hours</div><p class="kpi-value">{{ summary.regular_hours|hours }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Overtime Hours</div><p class="kpi-value">{{ summary.overtime_hours|hours }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Total Pay</div><p class="kpi-value">{{ summary.total_pay|currency }}</p></div></div>
 </div>
 
-<div class="card shadow-sm mb-4 p-4">
-  <h2 class="h5 mb-3">Time entry</h2>
-  <form method="post" class="row g-3">
-    {% if current_user.is_admin() or current_user.is_manager() %}
-      <div class="col-md-4">
-        <label class="form-label" for="employee_id">Employee</label>
+<div class="surface-card mb-3">
+  <div class="card-head"><h3 class="h6">Log Hours</h3><span class="muted-meta">Timesheets are reviewable by role-based approvers</span></div>
+  <form method="post" class="row g-3 mt-1" id="hoursForm">
+    {% if admin_view %}
+      <div class="col-md-3">
+        <label class="form-label">Employee</label>
         <select id="employee_id" name="employee_id" class="form-select" required>
-          <option value="">Choose an employee</option>
+          <option value="">Choose employee</option>
           {% for employee in employees %}
-            <option value="{{ employee.id }}" {% if selected_employee == employee.id|string %}selected{% endif %}>{{ employee.full_name() }} - {{ employee.job_title }}</option>
+            <option value="{{ employee.id }}" {% if selected_employee == employee.id|string %}selected{% endif %}>{{ employee.full_name() }} · {{ employee.job_title }}</option>
           {% endfor %}
         </select>
       </div>
     {% endif %}
-    <div class="col-md-4">
-      <label class="form-label" for="work_date">Week start</label>
+    <div class="col-md-3">
+      <label class="form-label">Work Date</label>
       <input id="work_date" name="work_date" type="date" class="form-control" required />
+      <button class="btn btn-sm btn-link px-0" type="button" id="todayBtn">Use Today</button>
     </div>
-    <div class="col-md-4">
-      <label class="form-label" for="hours_worked">Hours worked</label>
-      <input id="hours_worked" name="hours_worked" type="number" min="0" max="168" step="0.25" class="form-control" required />
+    <div class="col-md-3">
+      <label class="form-label">Hours Worked</label>
+      <input id="hours_worked" name="hours_worked" type="number" step="0.25" min="0" max="168" class="form-control" required />
+      <div class="helper-copy">Use decimal format for partial shifts (example: 7.5).</div>
     </div>
-    <div class="col-12">
-      <label class="form-label" for="notes">Notes</label>
-      <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional payroll note"></textarea>
+    <div class="col-md-3">
+      <label class="form-label">Notes</label>
+      <input id="notes" name="notes" class="form-control" placeholder="Shift notes" />
     </div>
-    <div class="col-12">
-      <button type="submit" class="btn btn-primary">Save Payroll Record</button>
-    </div>
+    <div class="col-12"><button type="submit" class="btn btn-primary" id="hoursSubmit">Save Entry</button></div>
   </form>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-4">
-    <div class="card shadow-sm p-4">
-      <h2 class="h6">Summary</h2>
-      <dl class="row mt-3">
-        <dt class="col-6 text-muted">Hours worked</dt>
-        <dd class="col-6">{{ summary.hours|hours }}</dd>
-        <dt class="col-6 text-muted">Regular hours</dt>
-        <dd class="col-6">{{ summary.regular_hours|hours }}</dd>
-        <dt class="col-6 text-muted">Overtime hours</dt>
-        <dd class="col-6">{{ summary.overtime_hours|hours }}</dd>
-        <dt class="col-6 text-muted">Total pay</dt>
-        <dd class="col-6">{{ summary.total_pay|currency }}</dd>
-      </dl>
-    </div>
+<div class="surface-card">
+  <div class="table-toolbar">
+    <h3 class="h6 mb-0">Recent Entries</h3>
+    <span class="meta-inline"><i class="bi bi-clock-history"></i>Most recent updates first</span>
   </div>
-  <div class="col-lg-8">
-    <div class="card shadow-sm p-4">
-      <h2 class="h6 mb-3">Payroll records</h2>
-      {% if records %}
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Week</th>
-                <th>Employee</th>
-                <th>Hours</th>
-                <th>Regular</th>
-                <th>Overtime</th>
-                <th>Total</th>
-                {% if current_user.is_admin() or current_user.is_manager() %}<th class="text-end">Actions</th>{% endif %}
-              </tr>
-            </thead>
-            <tbody>
-              {% for record in records %}
-                <tr>
-                  <td>{{ record.work_date }}</td>
-                  <td>{{ record.employee.full_name() }}</td>
-                  <td>{{ record.hours_worked|hours }}</td>
-                  <td>{{ record.regular_hours|hours }}</td>
-                  <td>{{ record.overtime_hours|hours }}</td>
-                  <td>{{ record.total_pay|currency }}</td>
-                  {% if current_user.is_admin() or current_user.is_manager() %}
-                    <td class="text-end">
-                      <form method="post" action="{{ url_for('employees.delete_payroll', record_id=record.id) }}" onsubmit="return confirm('Remove this payroll record?');">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                      </form>
-                    </td>
-                  {% endif %}
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="alert alert-secondary">No payroll records are available.</div>
-      {% endif %}
+  {% if records %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            {% if admin_view %}<th>Employee</th>{% endif %}
+            <th>Hours</th>
+            <th>Overtime</th>
+            <th>Total Pay</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+            <tr>
+              <td>{{ record.work_date }}</td>
+              {% if admin_view %}<td>{{ record.employee.full_name() }}</td>{% endif %}
+              <td>{{ record.hours_worked|hours }}</td>
+              <td>{{ record.overtime_hours|hours }}</td>
+              <td>{{ record.total_pay|currency }}</td>
+              <td><span class="status-badge status-{{ record.status|lower }}">{{ record.status }}</span></td>
+              <td class="text-end">
+                {% if admin_view %}
+                  <div class="action-cluster">
+                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="action" value="review" /><button class="btn btn-sm btn-ghost" type="submit">Review</button></form>
+                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
+                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
+                    <form method="post" action="{{ url_for('employees.delete_payroll', record_id=record.id) }}" onsubmit="return confirm('Delete this payroll entry permanently?');"><button class="btn btn-sm btn-outline-secondary" type="submit">Delete</button></form>
+                  </div>
+                {% else %}
+                  <span class="small text-muted">Awaiting review</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
+  {% else %}
+    {{ ui.empty_state('No payroll entries yet', 'Submit hours above to generate your first payroll record.') }}
+  {% endif %}
 </div>
+
+{% if pagination and pagination.pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} records)</div>
+    <nav aria-label="Payroll pagination">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('employees.payroll', page=pagination.prev_num if pagination.has_prev else 1, per_page=per_page, employee_id=selected_employee) }}">Previous</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">{{ pagination.page }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('employees.payroll', page=pagination.next_num if pagination.has_next else pagination.page, per_page=per_page, employee_id=selected_employee) }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const workDate = document.getElementById('work_date');
+  const todayBtn = document.getElementById('todayBtn');
+  const hoursSubmit = document.getElementById('hoursSubmit');
+  const hoursForm = document.getElementById('hoursForm');
+
+  if (todayBtn && workDate) {
+    todayBtn.addEventListener('click', function () {
+      workDate.value = new Date().toISOString().split('T')[0];
+    });
+  }
+
+  if (hoursForm && hoursSubmit) {
+    hoursForm.addEventListener('submit', function () {
+      hoursSubmit.disabled = true;
+      hoursSubmit.textContent = 'Saving...';
+    });
+  }
+</script>
 {% endblock %}

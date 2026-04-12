@@ -1,42 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Submit Leave Request{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}Request Leave{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Submit Leave Request</h1>
-    <p class="text-muted">Tell your manager why you need time off and when.</p>
-  </div>
-  <a class="btn btn-outline-secondary" href="{{ url_for('leave.index') }}">Back to Requests</a>
-</div>
+{% call ui.page_header('Submit Leave Request', 'Plan time off and keep your manager informed with clear dates and coverage context.') %}
+  <a class="btn btn-ghost" href="{{ url_for('leave.index') }}">Back to Leave Board</a>
+{% endcall %}
 
-<div class="card shadow-sm p-4">
-  <form method="post" class="row g-3">
-    <div class="col-md-6">
-      <label class="form-label" for="request_type">Leave Type</label>
-      <select id="request_type" name="request_type" class="form-select" required>
-        <option value="">Select a type</option>
-        <option>Vacation</option>
-        <option>Sick Leave</option>
-        <option>Personal Leave</option>
-        <option>Remote Work</option>
-      </select>
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="surface-card">
+      <p class="section-note mb-3">Provide complete dates and concise context so approvers can process requests quickly.</p>
+      <form method="post" class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label">Leave Type</label>
+          <select name="request_type" class="form-select" required>
+            <option value="">Select leave type</option>
+            <option>Vacation</option>
+            <option>Sick Leave</option>
+            <option>Personal Leave</option>
+            <option>Remote Work</option>
+          </select>
+        </div>
+        <div class="col-md-3"><label class="form-label">Start Date</label><input name="start_date" type="date" class="form-control" required /></div>
+        <div class="col-md-3"><label class="form-label">End Date</label><input name="end_date" type="date" class="form-control" required /></div>
+        <div class="col-12">
+          <label class="form-label">Reason / Notes</label>
+          <textarea name="reason" rows="4" class="form-control" placeholder="Provide context for approvers and scheduling coverage."></textarea>
+        </div>
+        <div class="col-12 d-flex gap-2 mt-2">
+          <button class="btn btn-primary" type="submit">Submit for Approval</button>
+          <a class="btn btn-ghost" href="{{ url_for('leave.index') }}">Cancel</a>
+        </div>
+      </form>
     </div>
-    <div class="col-md-3">
-      <label class="form-label" for="start_date">Start Date</label>
-      <input id="start_date" name="start_date" type="date" class="form-control" required />
+  </div>
+
+  <div class="col-lg-4">
+    <div class="surface-card">
+      <h3 class="h6">Scheduling Guidance</h3>
+      <ul class="small text-muted mb-0">
+        <li>Submit requests at least 5 business days before planned absence.</li>
+        <li>Use notes for handoff context when requesting multiple days.</li>
+        <li>Approval status appears in your notifications inbox.</li>
+      </ul>
     </div>
-    <div class="col-md-3">
-      <label class="form-label" for="end_date">End Date</label>
-      <input id="end_date" name="end_date" type="date" class="form-control" required />
-    </div>
-    <div class="col-12">
-      <label class="form-label" for="reason">Reason</label>
-      <textarea id="reason" name="reason" rows="4" class="form-control" placeholder="Optional details"></textarea>
-    </div>
-    <div class="col-12">
-      <button type="submit" class="btn btn-primary">Submit Request</button>
-      <a class="btn btn-outline-secondary" href="{{ url_for('leave.index') }}">Cancel</a>
-    </div>
-  </form>
+  </div>
 </div>
 {% endblock %}

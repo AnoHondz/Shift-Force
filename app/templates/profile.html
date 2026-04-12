@@ -1,70 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Profile{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}My Profile{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">My Profile</h1>
-    <p class="text-muted">Update your contact information and schedule details.</p>
-  </div>
-</div>
+{{ ui.page_header('My Profile', 'Manage your contact details, schedule, and account visibility.') }}
 
-<div class="row g-4">
-  <div class="col-lg-5">
-    <div class="card shadow-sm p-4">
-      <h2 class="h5">Account details</h2>
-      <dl class="row mt-3">
-        <dt class="col-5 text-muted">Username</dt>
-        <dd class="col-7">{{ current_user.username }}</dd>
-        <dt class="col-5 text-muted">Role</dt>
-        <dd class="col-7">{{ current_user.role.title() }}</dd>
-        {% if employee %}
-          <dt class="col-5 text-muted">Position</dt>
-          <dd class="col-7">{{ employee.job_title }}</dd>
-          <dt class="col-5 text-muted">Department</dt>
-          <dd class="col-7">{{ employee.department.name if employee.department else 'Unassigned' }}</dd>
-          <dt class="col-5 text-muted">Hourly Pay</dt>
-          <dd class="col-7">{{ employee.hourly_rate|currency }}</dd>
-        {% endif %}
+<p class="section-note mb-3">Keep profile information current to ensure payroll, notifications, and leave workflows remain accurate.</p>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-4">
+    <div class="surface-card h-100">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="avatar-chip avatar-lg">{{ employee.first_name[0] if employee else 'U' }}{{ employee.last_name[0] if employee else 'S' }}</div>
+        <div>
+          <h3 class="h5 mb-1">{{ employee.full_name() if employee else current_user.username }}</h3>
+          <div class="small text-muted">{{ employee.job_title if employee else 'No profile linked' }}</div>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <span class="status-badge status-active">Active</span>
+        <span class="status-badge status-info">{{ role_label(current_user.role) }}</span>
+      </div>
+      <dl class="row mb-0 profile-data-list">
+        <dt class="col-5">Username</dt><dd class="col-7">{{ current_user.username }}</dd>
+        <dt class="col-5">Department</dt><dd class="col-7">{{ employee.department.name if employee and employee.department else 'Unassigned' }}</dd>
+        <dt class="col-5">Compensation</dt><dd class="col-7">{{ employee.hourly_rate|currency if employee else 'Restricted' }}</dd>
+        <dt class="col-5">Schedule</dt><dd class="col-7">{{ employee.schedule if employee else 'N/A' }}</dd>
       </dl>
     </div>
   </div>
-  <div class="col-lg-7">
-    <div class="card shadow-sm p-4">
-      <h2 class="h5">Edit personal details</h2>
+
+  <div class="col-lg-8">
+    <div class="surface-card">
+      <div class="card-head"><h3 class="h6 section-title mb-0">Edit Personal Details</h3><span class="muted-meta">Changes are saved to your employee record</span></div>
       {% if employee %}
-        <form method="post" class="row g-3 mt-3">
-          <div class="col-md-6">
-            <label class="form-label" for="first_name">First Name</label>
-            <input id="first_name" name="first_name" class="form-control" value="{{ employee.first_name }}" required />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="last_name">Last Name</label>
-            <input id="last_name" name="last_name" class="form-control" value="{{ employee.last_name }}" required />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="email">Email</label>
-            <input id="email" name="email" type="email" class="form-control" value="{{ employee.email }}" required />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="phone">Phone</label>
-            <input id="phone" name="phone" class="form-control" value="{{ employee.phone }}" />
-          </div>
-          <div class="col-12">
-            <label class="form-label" for="address">Address</label>
-            <input id="address" name="address" class="form-control" value="{{ employee.address }}" />
-          </div>
-          <div class="col-12">
-            <label class="form-label" for="schedule">Work Schedule</label>
-            <input id="schedule" name="schedule" class="form-control" value="{{ employee.schedule }}" />
-          </div>
-          <div class="col-12">
-            <button type="submit" class="btn btn-primary">Save Profile</button>
+        <form method="post" class="row g-3 form-shell">
+          <div class="col-md-6"><label class="form-label">First Name</label><input class="form-control" name="first_name" value="{{ employee.first_name }}" required /></div>
+          <div class="col-md-6"><label class="form-label">Last Name</label><input class="form-control" name="last_name" value="{{ employee.last_name }}" required /></div>
+          <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="{{ employee.email }}" required /></div>
+          <div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" name="phone" value="{{ employee.phone }}" /></div>
+          <div class="col-12"><label class="form-label">Address</label><input class="form-control" name="address" value="{{ employee.address }}" /></div>
+          <div class="col-12"><label class="form-label">Work Schedule</label><input class="form-control" name="schedule" value="{{ employee.schedule }}" /></div>
+          <div class="col-12 d-flex flex-wrap gap-2 mt-1">
+            <button class="btn btn-primary" type="submit">Save Profile Changes</button>
+            <button class="btn btn-ghost" type="reset">Reset</button>
           </div>
         </form>
       {% else %}
-        <div class="alert alert-warning">Your account is not linked to an employee profile.</div>
+        {{ ui.empty_state('Profile not linked', 'Your user account is missing an employee profile association. Contact an administrator to complete setup.') }}
       {% endif %}
     </div>
   </div>
+</div>
+
+<div class="surface-card">
+  <h3 class="h6">Profile Assets and Documents</h3>
+  <p class="small text-muted mb-0">Profile document uploads and photo workflows can be connected here for onboarding and compliance operations.</p>
 </div>
 {% endblock %}

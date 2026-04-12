@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from ..decorators import roles_required
 from ..extensions import db
-from ..models import Employee, LeaveRequest, Role
+from ..models import Employee, LeaveRequest, Role, User, create_audit_log, create_notification
 from ..utils import get_current_employee, parse_date
 
 
@@ -16,7 +16,7 @@ leave_bp = Blueprint("leave", __name__, url_prefix="/leave")
 @leave_bp.route("/")
 @login_required
 def index():
-    if current_user.is_admin() or current_user.is_manager():
+    if current_user.has_admin_access():
         requests = LeaveRequest.query.options(joinedload(LeaveRequest.employee)).order_by(LeaveRequest.submitted_at.desc()).all()
     else:
         requests = (
@@ -67,6 +67,22 @@ def submit():
                 submitted_at=datetime.utcnow(),
             )
             db.session.add(leave_request)
+            create_audit_log(
+                current_user,
+                "leave_submitted",
+                "LeaveRequest",
+                None,
+                f"{employee.full_name()} submitted a {request_type} leave request.",
+            )
+            admin_users = User.query.filter(User.role.in_(Role.ADMIN_LIKE)).all()
+            for user in admin_users:
+                create_notification(
+                    user,
+                    "Pending leave approval",
+                    f"{employee.full_name()} submitted a {request_type} request from {start_date_obj} to {end_date_obj}.",
+                    "/leave",
+                    "approval",
+                )
             db.session.commit()
             flash("Leave request submitted.", "success")
             return redirect(url_for("leave.index"))
@@ -77,7 +93,7 @@ def submit():
 
 
 @leave_bp.route("/<int:request_id>/review", methods=("POST",))
-@roles_required(Role.ADMIN, Role.MANAGER)
+@roles_required(*Role.ADMIN_LIKE)
 def review(request_id):
     action = request.form.get("action")
     leave_request = LeaveRequest.query.get_or_404(request_id)
@@ -88,6 +104,21 @@ def review(request_id):
     leave_request.status = "Approved" if action == "approve" else "Rejected"
     leave_request.reviewed_by_id = current_user.id
     leave_request.reviewed_at = datetime.utcnow()
+    create_audit_log(
+        current_user,
+        "leave_reviewed",
+        "LeaveRequest",
+        str(leave_request.id),
+        f"Leave request for {leave_request.employee.full_name()} marked {leave_request.status.lower()}.",
+    )
+    if leave_request.employee.user:
+        create_notification(
+            leave_request.employee.user,
+            "Leave request updated",
+            f"Your leave request was {leave_request.status.lower()} by {current_user.username}.",
+            "/leave",
+            "info" if action == "approve" else "warning",
+        )
     db.session.commit()
     flash(f"Leave request {leave_request.status.lower()}.", "success")
     return redirect(url_for("leave.index"))

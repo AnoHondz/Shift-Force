@@ -1,18 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Audit Logs{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}Audit Trail{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Audit Logs</h1>
-    <p class="text-muted">Review important actions performed by admins, managers, and employees.</p>
-  </div>
-</div>
+{{ ui.page_header('Audit Trail', 'Governance records for workforce, payroll, and system access events.') }}
 
-<div class="card shadow-sm p-4 mb-4">
-  <form method="get" class="row g-3 align-items-end">
-    <div class="col-md-4">
-      <label class="form-label" for="action_type">Action type</label>
-      <select id="action_type" name="action_type" class="form-select">
+<div class="surface-card mb-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label">Action</label>
+      <select name="action_type" class="form-select">
         <option value="">All actions</option>
         {% for action in action_types %}
           <option value="{{ action }}" {% if selected_action == action %}selected{% endif %}>{{ action.replace('_', ' ').title() }}</option>
@@ -20,39 +16,60 @@
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label" for="start_date">Start date</label>
-      <input id="start_date" name="start_date" type="date" class="form-control" value="{{ start_date }}" />
-    </div>
-    <div class="col-md-3">
-      <label class="form-label" for="end_date">End date</label>
-      <input id="end_date" name="end_date" type="date" class="form-control" value="{{ end_date }}" />
+      <label class="form-label">Search</label>
+      <input name="search" class="form-control" value="{{ selected_search }}" placeholder="User, target, description" />
     </div>
     <div class="col-md-2">
-      <button type="submit" class="btn btn-primary w-100">Filter</button>
+      <label class="form-label">Severity</label>
+      <select class="form-select" name="severity">
+        <option value="">All severities</option>
+        <option value="critical" {% if selected_severity == 'critical' %}selected{% endif %}>Critical</option>
+        <option value="high" {% if selected_severity == 'high' %}selected{% endif %}>High</option>
+        <option value="info" {% if selected_severity == 'info' %}selected{% endif %}>Info</option>
+      </select>
+    </div>
+    <div class="col-md-2"><label class="form-label">Start</label><input name="start_date" type="date" class="form-control" value="{{ start_date }}" /></div>
+    <div class="col-md-2"><label class="form-label">End</label><input name="end_date" type="date" class="form-control" value="{{ end_date }}" /></div>
+    <div class="col-md-2">
+      <label class="form-label">Rows</label>
+      <select class="form-select" name="per_page">
+        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+      </select>
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Apply Filters</button>
+      <a class="btn btn-ghost" href="{{ url_for('audit.index') }}">Reset</a>
     </div>
   </form>
 </div>
 
-<div class="card shadow-sm p-4">
+<div class="surface-card">
   {% if logs %}
+    <div class="table-toolbar">
+      <p class="muted-meta mb-0">Showing {{ logs|length }} of {{ pagination.total if pagination else logs|length }} events.</p>
+      <span class="meta-inline"><i class="bi bi-shield-check"></i>All access and workflow actions are retained for review</span>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Timestamp</th>
-            <th>User</th>
-            <th>Action</th>
-            <th>Target</th>
-            <th>Description</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Target</th><th>Description</th></tr></thead>
         <tbody>
           {% for log in logs %}
+            {% set severity = 'info' %}
+            {% if log.action_type in ['employee_deleted', 'security_alert', 'login_failed'] %}
+              {% set severity = 'danger' %}
+            {% elif log.action_type in ['leave_reviewed', 'payroll_deleted', 'employee_updated'] %}
+              {% set severity = 'pending' %}
+            {% endif %}
             <tr>
               <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
               <td>{{ log.user.username if log.user else 'System' }}</td>
-              <td>{{ log.action_type.replace('_', ' ').title() }}</td>
-              <td>{{ log.target_type }} {{ log.target_id or '' }}</td>
+              <td>
+                <div>{{ log.action_type.replace('_', ' ').title() }}</div>
+                <span class="status-badge status-{{ severity }}">{{ severity.title() }}</span>
+              </td>
+              <td>{{ log.target_type or 'N/A' }} {{ log.target_id or '' }}</td>
               <td>{{ log.description }}</td>
             </tr>
           {% endfor %}
@@ -60,7 +77,24 @@
       </table>
     </div>
   {% else %}
-    <div class="alert alert-secondary">No audit events found for the selected filters.</div>
+    {{ ui.empty_state('No events matched', 'Try reducing filter constraints or broaden the date range to inspect more activity.') }}
   {% endif %}
 </div>
+
+{% if pagination and pagination.pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} events)</div>
+    <nav aria-label="Audit pagination">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('audit.index', page=pagination.prev_num if pagination.has_prev else 1, per_page=per_page, action_type=selected_action, search=selected_search, severity=selected_severity, start_date=start_date, end_date=end_date) }}">Previous</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">{{ pagination.page }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('audit.index', page=pagination.next_num if pagination.has_next else pagination.page, per_page=per_page, action_type=selected_action, search=selected_search, severity=selected_severity, start_date=start_date, end_date=end_date) }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+{% endif %}
 {% endblock %}

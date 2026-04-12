@@ -1,93 +1,182 @@
 {% extends "base.html" %}
-{% block title %}Reports{% endblock %}
+{% import "_components.html" as ui %}
+{% block title %}Executive Reports{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-2">Reports</h1>
-    <p class="text-muted">Generate weekly or monthly payroll summaries and export CSV files for review.</p>
+{% call ui.page_header('Payroll and Workforce Reports', 'Weekly and monthly reporting for payroll, overtime, and departmental spend.') %}
+  <div class="d-flex gap-2">
+    <a class="btn btn-primary" href="{{ url_for('reports.export_csv', period=selected_preset, start_date=start_date, end_date=end_date) }}">Export CSV</a>
+    <a class="btn btn-ghost" href="{{ url_for('reports.export_pdf', period=selected_preset, start_date=start_date, end_date=end_date) }}">Export PDF</a>
   </div>
-  <div class="d-flex gap-2 flex-wrap">
-    <a class="btn btn-primary" href="{{ url_for('reports.export_csv', period='weekly') }}">Export Weekly CSV</a>
-    <a class="btn btn-outline-secondary" href="{{ url_for('reports.export_csv', period='monthly') }}">Export Monthly CSV</a>
+{% endcall %}
+
+<div class="surface-card mb-3">
+  <p class="section-note">Choose a preset or custom range to generate payroll summaries suitable for operations and finance review.</p>
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label">Preset</label>
+      <select class="form-select" name="preset">
+        <option value="weekly" {% if selected_preset == 'weekly' %}selected{% endif %}>This Week</option>
+        <option value="monthly" {% if selected_preset == 'monthly' %}selected{% endif %}>This Month</option>
+        <option value="last30" {% if selected_preset == 'last30' %}selected{% endif %}>Last 30 Days</option>
+      </select>
+    </div>
+    <div class="col-md-3"><label class="form-label">Start Date</label><input class="form-control" type="date" name="start_date" value="{{ start_date }}" /></div>
+    <div class="col-md-3"><label class="form-label">End Date</label><input class="form-control" type="date" name="end_date" value="{{ end_date }}" /></div>
+    <div class="col-md-2">
+      <label class="form-label">Sort</label>
+      <select class="form-select" name="sort">
+        <option value="date" {% if sort == 'date' %}selected{% endif %}>Date</option>
+        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+        <option value="hours" {% if sort == 'hours' %}selected{% endif %}>Hours</option>
+        <option value="overtime" {% if sort == 'overtime' %}selected{% endif %}>Overtime</option>
+        <option value="pay" {% if sort == 'pay' %}selected{% endif %}>Pay</option>
+      </select>
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">Dir</label>
+      <select class="form-select" name="direction">
+        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Desc</option>
+        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Asc</option>
+      </select>
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">Rows</label>
+      <select class="form-select" name="per_page">
+        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+        <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+      </select>
+    </div>
+    <div class="col-md-12"><button class="btn btn-primary" type="submit">Run Report</button></div>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Total Pay</div><p class="kpi-value">{{ summary.total_pay|currency }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Hours Logged</div><p class="kpi-value">{{ summary.total_hours|hours }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Overtime Hours</div><p class="kpi-value">{{ summary.overtime_hours|hours }}</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Active Headcount</div><p class="kpi-value">{{ summary.headcount }}</p></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-7">
+    <div class="surface-card">
+      <div class="card-head"><h3 class="h6 mb-0">Payroll Trend</h3><span class="muted-meta">Total pay over selected period</span></div>
+      <canvas id="reportPayChart" height="120"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="surface-card">
+      <div class="card-head"><h3 class="h6 mb-0">Overtime Trend</h3><span class="muted-meta">Overtime volume by date</span></div>
+      <canvas id="reportOtChart" height="120"></canvas>
+    </div>
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-6">
-    <div class="card shadow-sm p-4">
-      <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
-          <h2 class="h5">Weekly payroll</h2>
-          <p class="text-muted">{{ weekly_start }} to {{ weekly_end }}</p>
-        </div>
-        <div class="text-end">
-          <div class="fw-bold">Total pay</div>
-          <div>{{ weekly_total_pay|currency }}</div>
-          <div class="text-muted small">{{ weekly_total_hours|hours }} hours</div>
-        </div>
-      </div>
-      {% if weekly_rows %}
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hours</th><th>Overtime</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              {% for record in weekly_rows %}
-                <tr>
-                  <td>{{ record.employee.full_name() }}</td>
-                  <td>{{ record.employee.job_title }}</td>
-                  <td>{{ record.employee.department.name if record.employee.department else 'Unassigned' }}</td>
-                  <td>{{ record.hours_worked|hours }}</td>
-                  <td>{{ record.overtime_hours|hours }}</td>
-                  <td>{{ record.total_pay|currency }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="alert alert-secondary">No weekly payroll records found.</div>
-      {% endif %}
-    </div>
+<div class="surface-card mb-3">
+  <div class="table-toolbar">
+    <h3 class="h6 mb-0">Department Summaries</h3>
+    <span class="meta-inline"><i class="bi bi-building"></i>Aggregated by department assignment</span>
   </div>
-  <div class="col-lg-6">
-    <div class="card shadow-sm p-4">
-      <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
-          <h2 class="h5">Monthly payroll</h2>
-          <p class="text-muted">{{ monthly_start }} to {{ monthly_end }}</p>
-        </div>
-        <div class="text-end">
-          <div class="fw-bold">Total pay</div>
-          <div>{{ monthly_total_pay|currency }}</div>
-          <div class="text-muted small">{{ monthly_total_hours|hours }} hours</div>
-        </div>
-      </div>
-      {% if monthly_rows %}
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr><th>Employee</th><th>Position</th><th>Department</th><th>Hours</th><th>Overtime</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              {% for record in monthly_rows %}
-                <tr>
-                  <td>{{ record.employee.full_name() }}</td>
-                  <td>{{ record.employee.job_title }}</td>
-                  <td>{{ record.employee.department.name if record.employee.department else 'Unassigned' }}</td>
-                  <td>{{ record.hours_worked|hours }}</td>
-                  <td>{{ record.overtime_hours|hours }}</td>
-                  <td>{{ record.total_pay|currency }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="alert alert-secondary">No monthly payroll records found.</div>
-      {% endif %}
-    </div>
+  <div class="table-responsive mt-2">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Department</th><th>Total Pay</th></tr></thead>
+      <tbody>
+        {% for row in by_department %}
+          <tr>
+            <td>{{ row[0] or 'Unassigned' }}</td>
+            <td>{{ row[1]|currency }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="text-muted">No department data available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
+
+<div class="surface-card">
+  <div class="table-toolbar">
+    <h3 class="h6 mb-0">Detailed Report Rows ({{ period_start }} to {{ period_end }})</h3>
+    <span class="meta-inline"><i class="bi bi-table"></i>{{ pagination.total if pagination else rows|length }} rows</span>
+  </div>
+  {% if rows %}
+    <div class="table-responsive mt-2">
+      <table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Date</th><th>Employee</th><th>Department</th><th>Hours</th><th>Overtime</th><th>Total Pay</th></tr></thead>
+        <tbody>
+          {% for record in rows %}
+            <tr>
+              <td>{{ record.work_date }}</td>
+              <td>{{ record.employee.full_name() }}</td>
+              <td>{{ record.employee.department.name if record.employee.department else 'Unassigned' }}</td>
+              <td>{{ record.hours_worked|hours }}</td>
+              <td>{{ record.overtime_hours|hours }}</td>
+              <td>{{ record.total_pay|currency }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {{ ui.empty_state('No records for this range', 'Try a broader period or remove restrictive filters to include more payroll entries.') }}
+  {% endif %}
+</div>
+
+{% if pagination and pagination.pages > 1 %}
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} rows)</div>
+    <nav aria-label="Reports pagination">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('reports.index', page=pagination.prev_num if pagination.has_prev else 1, per_page=per_page, preset=selected_preset, start_date=start_date, end_date=end_date, sort=sort, direction=direction) }}">Previous</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">{{ pagination.page }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('reports.index', page=pagination.next_num if pagination.has_next else pagination.page, per_page=per_page, preset=selected_preset, start_date=start_date, end_date=end_date, sort=sort, direction=direction) }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const labels = {{ chart_labels|tojson }};
+  const payValues = {{ chart_pay|tojson }};
+  const otValues = {{ chart_ot|tojson }};
+  const darkTick = '#8ba2bf';
+  const darkGrid = 'rgba(255,255,255,0.06)';
+
+  const reportPayChart = document.getElementById('reportPayChart');
+  if (reportPayChart) {
+    new Chart(reportPayChart, {
+      type: 'line',
+      data: { labels, datasets: [{ data: payValues, borderColor: '#ff6233', backgroundColor: 'rgba(255,98,51,0.12)', fill: true, tension: 0.35, pointBackgroundColor: '#ff6233', pointRadius: 3 }] },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: darkTick }, grid: { color: darkGrid } },
+          y: { ticks: { color: darkTick }, grid: { color: darkGrid } }
+        }
+      }
+    });
+  }
+
+  const reportOtChart = document.getElementById('reportOtChart');
+  if (reportOtChart) {
+    new Chart(reportOtChart, {
+      type: 'bar',
+      data: { labels, datasets: [{ data: otValues, backgroundColor: 'rgba(251, 185, 84, 0.75)', borderColor: '#f59e0b', borderWidth: 1, borderRadius: 6 }] },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: darkTick }, grid: { color: darkGrid } },
+          y: { ticks: { color: darkTick }, grid: { color: darkGrid } }
+        }
+      }
+    });
+  }
+</script>
 {% endblock %}

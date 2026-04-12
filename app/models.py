@@ -7,10 +7,28 @@ from .extensions import db
 
 
 class Role:
+    EXECUTIVE = "executive"
     ADMIN = "admin"
+    HR = "hr"
+    PAYROLL = "payroll"
     MANAGER = "manager"
     EMPLOYEE = "employee"
-    CHOICES = (ADMIN, MANAGER, EMPLOYEE)
+    CHOICES = (EXECUTIVE, ADMIN, HR, PAYROLL, MANAGER, EMPLOYEE)
+    ADMIN_LIKE = (EXECUTIVE, ADMIN, HR, PAYROLL, MANAGER)
+
+    @classmethod
+    def label(cls, role: str) -> str:
+        mapping = {
+            cls.EXECUTIVE: "Executive",
+            cls.ADMIN: "Administrator",
+            cls.HR: "HR",
+            cls.PAYROLL: "Payroll Admin",
+            cls.MANAGER: "Manager",
+            cls.EMPLOYEE: "Employee",
+        }
+        if not role:
+            return "Unknown"
+        return mapping.get(role, role.title())
 
 
 class Department(db.Model):
@@ -103,11 +121,23 @@ class User(UserMixin, db.Model):
     def is_admin(self) -> bool:
         return self.role == Role.ADMIN
 
+    def is_executive(self) -> bool:
+        return self.role == Role.EXECUTIVE
+
+    def is_hr(self) -> bool:
+        return self.role == Role.HR
+
+    def is_payroll_admin(self) -> bool:
+        return self.role == Role.PAYROLL
+
     def is_manager(self) -> bool:
         return self.role == Role.MANAGER
 
     def is_employee(self) -> bool:
         return self.role == Role.EMPLOYEE
+
+    def has_admin_access(self) -> bool:
+        return self.role in Role.ADMIN_LIKE
 
     def __repr__(self):
         return f"<User {self.username} ({self.role})>"
@@ -124,9 +154,15 @@ class PayrollRecord(db.Model):
     overtime_hours = db.Column(db.Float, nullable=False)
     total_pay = db.Column(db.Float, nullable=False)
     notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(32), nullable=False, default="Pending")
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     employee = db.relationship("Employee", back_populates="payroll_records", lazy="joined")
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_id], lazy="joined")
+
+    STATUS_CHOICES = ("Pending", "Reviewed", "Approved", "Rejected")
 
     __table_args__ = (
         db.UniqueConstraint("employee_id", "work_date", name="uq_employee_work_date"),
@@ -140,7 +176,7 @@ class PayrollRecord(db.Model):
             total_pay = (40.0 * hourly_rate) + (overtime_hours * hourly_rate * overtime_multiplier)
         else:
             total_pay = hours_worked * hourly_rate
-        return regular_hours, overtime_hours, total_pay
+        return round(regular_hours, 2), round(overtime_hours, 2), round(total_pay, 2)
 
     @classmethod
     def build(cls, employee: "Employee", work_date: date, hours_worked: float, notes: str = ""):
@@ -248,12 +284,16 @@ class AuditLog(db.Model):
         "employee_updated",
         "employee_deleted",
         "payroll_created",
+        "payroll_reviewed",
         "payroll_deleted",
         "leave_submitted",
         "leave_reviewed",
         "profile_updated",
         "attendance_clocked_in",
         "attendance_clocked_out",
+        "login_failed",
+        "login_success",
+        "logout",
     ]
 
     def __repr__(self):
@@ -437,3 +477,45 @@ def seed_demo_data():
         "A manager will review your upcoming leave request soon.",
         "/leave",
     )
+
+    db.session.commit()
+
+
+def initialize_default_data(app):
+    default_departments = [
+        "Executive",
+        "Human Resources",
+        "Engineering",
+        "Operations",
+        "Finance",
+        "Customer Success",
+    ]
+    for name in default_departments:
+        if not Department.query.filter_by(name=name).first():
+            db.session.add(Department(name=name))
+    db.session.commit()
+
+    admin_username = app.config.get("DEFAULT_ADMIN_USERNAME", "admin")
+    admin_password = app.config.get("DEFAULT_ADMIN_PASSWORD", "Admin2026!")
+    admin_email = app.config.get("DEFAULT_ADMIN_EMAIL", "admin@workforce.local")
+    if not User.query.filter_by(username=admin_username).first():
+        employee = Employee(
+            first_name="System",
+            last_name="Administrator",
+            email=admin_email,
+            job_title="Executive Administrator",
+            department=Department.query.filter_by(name="Executive").first(),
+            hourly_rate=60.0,
+            overtime_multiplier=1.5,
+            date_hired=date.today(),
+            schedule="Mon-Fri 9:00 AM - 5:00 PM",
+        )
+        db.session.add(employee)
+        db.session.flush()
+
+        admin_user = User(username=admin_username, role=Role.ADMIN, employee_id=employee.id)
+        admin_user.set_password(admin_password)
+        db.session.add(admin_user)
+        db.session.commit()
+
+    seed_demo_data()

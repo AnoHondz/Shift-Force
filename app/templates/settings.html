@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_components.html" as ui %}
+{% block title %}System Settings{% endblock %}
+{% block content %}
+{{ ui.page_header('System Settings', 'Configure security, approvals, role controls, and notification preferences.') }}
+
+<p class="section-note mb-3">These controls represent operational defaults for authentication, approvals, and communications.</p>
+
+<form method="post" class="row g-3">
+  <div class="col-lg-6">
+    <div class="surface-card h-100">
+      <h3 class="h6">Account and Security</h3>
+      <div class="mb-2">
+        <label class="form-label">Session Timeout (minutes)</label>
+        <input class="form-control" name="session_timeout" type="number" min="5" value="30" />
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="approval_required" name="approval_required" checked />
+        <label class="form-check-label" for="approval_required">Require approval for all timesheet submissions</label>
+      </div>
+      <div class="small text-muted mt-2">Password and policy enforcement can be connected to your identity provider.</div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="surface-card h-100">
+      <h3 class="h6">Role and Permission Management</h3>
+      <div class="mb-2">
+        <label class="form-label">Default New User Role</label>
+        <select class="form-select" name="default_role">
+          <option value="employee">Employee</option>
+          <option value="manager">Manager</option>
+          <option value="hr">HR</option>
+          <option value="payroll">Payroll Admin</option>
+        </select>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Notification Channel</label>
+        <select class="form-select" name="notification_channel">
+          <option value="in_app">In-app only</option>
+          <option value="email">In-app and email</option>
+        </select>
+      </div>
+      <div class="small text-muted">Organization profile and branding controls can be connected here.</div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <button class="btn btn-primary" type="submit">Save Configuration</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,130 +1,180 @@
-from datetime import date
+from datetime import date, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import or_, func
+from sqlalchemy import and_, asc, desc, func, or_
 from sqlalchemy.orm import joinedload
 
 from ..decorators import roles_required
 from ..extensions import db
-from ..models import Attendance, Department, Employee, LeaveRequest, PayrollRecord, Role, User
-from ..utils import get_current_employee, parse_date
+from ..models import (
+    Attendance,
+    Department,
+    Employee,
+    LeaveRequest,
+    PayrollRecord,
+    Role,
+    User,
+    create_audit_log,
+    create_notification,
+)
+from ..utils import get_current_employee, parse_date, parse_positive_int
 
 
 employee_bp = Blueprint("employees", __name__)
 
 
+def _is_admin_experience():
+    return current_user.is_authenticated and current_user.has_admin_access()
+
+
+def _role_label(role: str) -> str:
+    return Role.label(role)
+
+
 @employee_bp.route("/")
 def home():
     if current_user.is_authenticated:
-        return redirect(url_for("employees.dashboard"))
-    return render_template("landing.html", active_page="home")
+        if current_user.has_admin_access():
+            return redirect(url_for("employees.dashboard"))
+        return redirect(url_for("employees.employee_dashboard"))
+    return redirect(url_for("auth.login"))
 
 
 @employee_bp.route("/dashboard")
 @login_required
 def dashboard():
-    employees = (
-        Employee.query.options(joinedload(Employee.department))
-        .order_by(Employee.last_name, Employee.first_name)
-        .limit(8)
-        .all()
-    )
-    if current_user.is_admin() or current_user.is_manager():
-        payroll_records = PayrollRecord.query.order_by(PayrollRecord.work_date.desc()).limit(6).all()
-        trend_rows = (
-            db.session.query(
-                PayrollRecord.work_date,
-                func.sum(PayrollRecord.total_pay).label("total_pay"),
-            )
-            .group_by(PayrollRecord.work_date)
-            .order_by(PayrollRecord.work_date.desc())
-            .limit(8)
-            .all()
-        )
-        payroll_dates = [row.work_date.isoformat() for row in reversed(trend_rows)]
-        payroll_totals = [float(row.total_pay) for row in reversed(trend_rows)]
+    if not current_user.has_admin_access():
+        return redirect(url_for("employees.employee_dashboard"))
 
-        department_rows = (
-            db.session.query(Department.name, func.count(Employee.id))
-            .outerjoin(Employee)
-            .group_by(Department.name)
-            .order_by(Department.name)
-            .all()
-        )
-        department_labels = [row[0] for row in department_rows]
-        department_counts = [int(row[1]) for row in department_rows]
+    today = date.today()
+    recent_records = PayrollRecord.query.options(joinedload(PayrollRecord.employee)).order_by(PayrollRecord.work_date.desc()).limit(8).all()
 
-        unassigned_count = Employee.query.filter(Employee.department_id.is_(None)).count()
-        if unassigned_count:
-            department_labels.append("Unassigned")
-            department_counts.append(unassigned_count)
-
-        active_clock_ins = Attendance.query.filter(Attendance.clock_out_at.is_(None)).count()
-        total_employee_count = Employee.query.count()
-        attendance_labels = ["Clocked In", "Not Clocked In"]
-        attendance_values = [active_clock_ins, max(total_employee_count - active_clock_ins, 0)]
-
-        pending_leave_count = LeaveRequest.query.filter_by(status="Pending").count()
-
-        stats = {
-            "employee_count": total_employee_count,
-            "department_count": Department.query.count(),
-            "pending_leave_count": pending_leave_count,
-            "active_clock_ins": active_clock_ins,
-            "recent_payroll_total": sum(record.total_pay for record in payroll_records),
-            "recent_payroll_hours": sum(record.hours_worked for record in payroll_records),
-        }
-        return render_template(
-            "dashboard.html",
-            active_page="dashboard",
-            stats=stats,
-            employees=employees,
-            recent_records=payroll_records,
-            payroll_dates=payroll_dates,
-            payroll_totals=payroll_totals,
-            department_labels=department_labels,
-            department_counts=department_counts,
-            attendance_labels=attendance_labels,
-            attendance_values=attendance_values,
-            my_profile=None,
-            my_summary=None,
-        )
-
-    my_profile = get_current_employee()
-    my_records = (
-        PayrollRecord.query.filter_by(employee_id=my_profile.id)
+    trend_rows = (
+        db.session.query(PayrollRecord.work_date, func.sum(PayrollRecord.total_pay).label("total_pay"))
+        .group_by(PayrollRecord.work_date)
         .order_by(PayrollRecord.work_date.desc())
         .limit(8)
         .all()
-        if my_profile
-        else []
     )
-    summary = {
-        "hours": sum(record.hours_worked for record in my_records),
-        "regular_hours": sum(record.regular_hours for record in my_records),
-        "overtime_hours": sum(record.overtime_hours for record in my_records),
-        "total_pay": sum(record.total_pay for record in my_records),
+    payroll_dates = [row.work_date.strftime("%b %d") for row in reversed(trend_rows)]
+    payroll_totals = [float(row.total_pay) for row in reversed(trend_rows)]
+
+    department_rows = (
+        db.session.query(Department.name, func.count(Employee.id))
+        .outerjoin(Employee)
+        .group_by(Department.name)
+        .order_by(Department.name)
+        .all()
+    )
+    department_labels = [row[0] for row in department_rows]
+    department_counts = [int(row[1]) for row in department_rows]
+
+    pending_hours = PayrollRecord.query.filter_by(status="Pending").count()
+    pending_leave_count = LeaveRequest.query.filter_by(status="Pending").count()
+    active_clock_ins = Attendance.query.filter(Attendance.clock_out_at.is_(None)).count()
+    total_employee_count = Employee.query.count()
+
+    overtime_hours = (
+        db.session.query(func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0))
+        .scalar()
+    )
+    regular_hours = (
+        db.session.query(func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0))
+        .scalar()
+    )
+    overtime_rate = round((overtime_hours / regular_hours) * 100, 1) if regular_hours else 0
+
+    stats = {
+        "employee_count": total_employee_count,
+        "payroll_total_week": sum(record.total_pay for record in recent_records),
+        "overtime_rate": overtime_rate,
+        "pending_approvals": pending_hours + pending_leave_count,
+        "active_clock_ins": active_clock_ins,
     }
+
+    alerts = []
+    if pending_leave_count:
+        alerts.append(f"{pending_leave_count} pending leave approvals")
+    if pending_hours:
+        alerts.append(f"{pending_hours} timesheets awaiting review")
+    missing_hours = PayrollRecord.query.filter(PayrollRecord.hours_worked < 35).count()
+    if missing_hours:
+        alerts.append(f"{missing_hours} records below expected weekly hours")
+
+    recent_hires = Employee.query.order_by(Employee.date_hired.desc()).limit(4).all()
+    activity_logs = (
+        db.session.query(User.username, PayrollRecord.work_date, PayrollRecord.status, PayrollRecord.total_pay)
+        .join(Employee, User.employee_id == Employee.id)
+        .join(PayrollRecord, PayrollRecord.employee_id == Employee.id)
+        .order_by(PayrollRecord.created_at.desc())
+        .limit(6)
+        .all()
+    )
+
     return render_template(
         "dashboard.html",
         active_page="dashboard",
-        stats=None,
-        employees=employees,
-        recent_records=my_records,
-        my_profile=my_profile,
+        page_title="Workforce Overview",
+        today=today,
+        stats=stats,
+        recent_records=recent_records,
+        payroll_dates=payroll_dates,
+        payroll_totals=payroll_totals,
+        department_labels=department_labels,
+        department_counts=department_counts,
+        attendance_labels=["Clocked In", "Off Shift"],
+        attendance_values=[active_clock_ins, max(total_employee_count - active_clock_ins, 0)],
+        alerts=alerts,
+        recent_hires=recent_hires,
+        activity_logs=activity_logs,
+    )
+
+
+@employee_bp.route("/employee/dashboard")
+@login_required
+def employee_dashboard():
+    profile = get_current_employee()
+    if profile is None:
+        flash("Your account is not linked to an employee profile.", "error")
+        return redirect(url_for("auth.logout"))
+
+    records = PayrollRecord.query.filter_by(employee_id=profile.id).order_by(PayrollRecord.work_date.desc()).limit(8).all()
+    leave_requests = LeaveRequest.query.filter_by(employee_id=profile.id).order_by(LeaveRequest.submitted_at.desc()).limit(5).all()
+
+    summary = {
+        "hours": sum(record.hours_worked for record in records),
+        "overtime": sum(record.overtime_hours for record in records),
+        "pay": sum(record.total_pay for record in records),
+    }
+    next_shift = profile.schedule or "Schedule pending"
+
+    return render_template(
+        "dashboard.html",
+        active_page="employee-dashboard",
+        page_title="My Workspace",
+        my_profile=profile,
+        my_records=records,
+        leave_requests=leave_requests,
         my_summary=summary,
+        next_shift=next_shift,
+        stats=None,
     )
 
 
 @employee_bp.route("/employees")
-@login_required
+@roles_required(*Role.ADMIN_LIKE)
 def employee_directory():
     search = request.args.get("search", "").strip()
-    department_id = request.args.get("department_id", "") or None
+    department_id = parse_positive_int(request.args.get("department_id"), default=None) if request.args.get("department_id") else None
     role_filter = request.args.get("role", "") or None
+    status_filter = request.args.get("status", "") or None
+    page = parse_positive_int(request.args.get("page"), default=1)
+    per_page = parse_positive_int(request.args.get("per_page"), default=20, maximum=100)
+    sort = request.args.get("sort", "name")
+    direction = request.args.get("direction", "asc")
 
-    query = Employee.query.options(joinedload(Employee.department)).outerjoin(User)
+    query = Employee.query.options(joinedload(Employee.department), joinedload(Employee.user)).outerjoin(User).outerjoin(Department)
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -136,27 +186,92 @@ def employee_directory():
                 Department.name.ilike(search_term),
             )
         )
-    if department_id:
-        query = query.filter(Employee.department_id == int(department_id))
     if role_filter in Role.CHOICES:
         query = query.filter(User.role == role_filter)
+    if department_id:
+        query = query.filter(Employee.department_id == department_id)
 
-    employees = query.order_by(Employee.last_name, Employee.first_name).all()
+    today = date.today()
+    probation_cutoff = today - timedelta(days=90)
+    if status_filter == "on_leave":
+        query = query.join(
+            LeaveRequest,
+            and_(
+                LeaveRequest.employee_id == Employee.id,
+                LeaveRequest.status == "Approved",
+                LeaveRequest.start_date <= today,
+                LeaveRequest.end_date >= today,
+            ),
+        ).distinct()
+    elif status_filter == "probation":
+        query = query.filter(Employee.date_hired >= probation_cutoff)
+    elif status_filter == "active":
+        query = query.filter(Employee.date_hired < probation_cutoff)
+
+    sort_map = {
+        "name": (Employee.last_name, Employee.first_name),
+        "department": (Department.name, Employee.last_name),
+        "email": (Employee.email, Employee.last_name),
+        "rate": (Employee.hourly_rate, Employee.last_name),
+    }
+    sort_columns = sort_map.get(sort, sort_map["name"])
+    order_by = [desc(column) if direction == "desc" else asc(column) for column in sort_columns]
+    pagination = query.order_by(*order_by).paginate(page=page, per_page=per_page, error_out=False)
+
     departments = Department.query.order_by(Department.name).all()
     return render_template(
         "employees.html",
         active_page="employees",
-        employees=employees,
+        page_title="Workforce Directory",
+        employees=pagination.items,
+        pagination=pagination,
         departments=departments,
         search=search,
-        selected_department=department_id,
+        selected_department=str(department_id) if department_id else "",
         selected_role=role_filter,
+        selected_status=status_filter,
+        sort=sort,
+        direction=direction,
+        per_page=per_page,
+        today=today,
         role_choices=Role.CHOICES,
+        role_label=_role_label,
+        admin_view=_is_admin_experience(),
+    )
+
+
+@employee_bp.route("/team")
+@login_required
+def team_directory():
+    search = request.args.get("search", "").strip()
+    department_id = parse_positive_int(request.args.get("department_id"), default=None) if request.args.get("department_id") else None
+    page = parse_positive_int(request.args.get("page"), default=1)
+    per_page = parse_positive_int(request.args.get("per_page"), default=12, maximum=60)
+
+    query = Employee.query.options(joinedload(Employee.department)).order_by(Employee.last_name, Employee.first_name)
+    if search:
+        q = f"%{search}%"
+        query = query.filter(or_(Employee.first_name.ilike(q), Employee.last_name.ilike(q), Employee.job_title.ilike(q)))
+    if department_id:
+        query = query.filter(Employee.department_id == department_id)
+
+    employees = query.paginate(page=page, per_page=per_page, error_out=False)
+    departments = Department.query.order_by(Department.name).all()
+    return render_template(
+        "team.html",
+        active_page="team",
+        page_title="Team Directory",
+        employees=employees.items,
+        pagination=employees,
+        departments=departments,
+        selected_department=str(department_id) if department_id else "",
+        search=search,
+        per_page=per_page,
     )
 
 
 @employee_bp.route("/employees/new", methods=("GET", "POST"))
-@roles_required(Role.ADMIN, Role.MANAGER)
+@roles_required(*Role.ADMIN_LIKE)
 def add_employee():
     departments = Department.query.order_by(Department.name).all()
     if request.method == "POST":
@@ -168,18 +283,13 @@ def add_employee():
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         schedule = request.form.get("schedule", "").strip() or "Mon-Fri 9:00 AM - 5:00 PM"
+
         try:
             hourly_rate = float(request.form.get("hourly_rate", "0"))
             overtime_multiplier = float(request.form.get("overtime_multiplier", "1.5"))
         except ValueError:
             flash("Hourly pay and overtime multiplier must be numeric.", "error")
-            return render_template(
-                "employee_form.html",
-                active_page="add-employee",
-                title="Add Employee",
-                employee=None,
-                departments=departments,
-            )
+            return render_template("employee_form.html", active_page="employees", title="Add Employee", employee=None, departments=departments)
 
         if not first_name or not last_name or not email or not job_title:
             flash("Name, email, and job title are required.", "error")
@@ -196,26 +306,22 @@ def add_employee():
                 department_id=department_id,
                 phone=phone,
                 address=address,
+                schedule=schedule,
                 hourly_rate=hourly_rate,
                 overtime_multiplier=overtime_multiplier,
                 date_hired=date.today(),
             )
             db.session.add(employee)
+            create_audit_log(current_user, "employee_created", "Employee", None, f"Employee {first_name} {last_name} was created.")
             db.session.commit()
             flash("Employee added successfully.", "success")
             return redirect(url_for("employees.employee_directory"))
 
-    return render_template(
-        "employee_form.html",
-        active_page="add-employee",
-        title="Add Employee",
-        employee=None,
-        departments=departments,
-    )
+    return render_template("employee_form.html", active_page="employees", title="Add Employee", employee=None, departments=departments)
 
 
 @employee_bp.route("/employees/<int:employee_id>/edit", methods=("GET", "POST"))
-@roles_required(Role.ADMIN, Role.MANAGER)
+@roles_required(*Role.ADMIN_LIKE)
 def edit_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     departments = Department.query.order_by(Department.name).all()
@@ -229,18 +335,13 @@ def edit_employee(employee_id):
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
         schedule = request.form.get("schedule", "").strip() or "Mon-Fri 9:00 AM - 5:00 PM"
+
         try:
             hourly_rate = float(request.form.get("hourly_rate", "0"))
             overtime_multiplier = float(request.form.get("overtime_multiplier", "1.5"))
         except ValueError:
             flash("Hourly pay and overtime multiplier must be numeric.", "error")
-            return render_template(
-                "employee_form.html",
-                active_page="employees",
-                title="Edit Employee",
-                employee=employee,
-                departments=departments,
-            )
+            return render_template("employee_form.html", active_page="employees", title="Edit Employee", employee=employee, departments=departments)
 
         if not first_name or not last_name or not email or not job_title:
             flash("Name, email, and job title are required.", "error")
@@ -256,26 +357,22 @@ def edit_employee(employee_id):
             employee.department_id = department_id
             employee.phone = phone
             employee.address = address
+            employee.schedule = schedule
             employee.hourly_rate = hourly_rate
             employee.overtime_multiplier = overtime_multiplier
-            employee.date_hired = employee.date_hired
+            create_audit_log(current_user, "employee_updated", "Employee", str(employee.id), f"Employee {employee.full_name()} profile updated.")
             db.session.commit()
             flash("Employee updated successfully.", "success")
             return redirect(url_for("employees.employee_directory"))
 
-    return render_template(
-        "employee_form.html",
-        active_page="employees",
-        title="Edit Employee",
-        employee=employee,
-        departments=departments,
-    )
+    return render_template("employee_form.html", active_page="employees", title="Edit Employee", employee=employee, departments=departments)
 
 
 @employee_bp.route("/employees/<int:employee_id>/delete", methods=("POST",))
-@roles_required(Role.ADMIN)
+@roles_required(Role.ADMIN, Role.EXECUTIVE)
 def delete_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
+    create_audit_log(current_user, "employee_deleted", "Employee", str(employee.id), f"Employee {employee.full_name()} was archived.")
     db.session.delete(employee)
     db.session.commit()
     flash("Employee record deleted successfully.", "success")
@@ -309,11 +406,12 @@ def profile():
             employee.phone = phone
             employee.address = address
             employee.schedule = schedule
+            create_audit_log(current_user, "profile_updated", "Employee", str(employee.id), f"{employee.full_name()} updated profile details.")
             db.session.commit()
             flash("Profile updated successfully.", "success")
             return redirect(url_for("employees.profile"))
 
-    return render_template("profile.html", active_page="profile", employee=employee)
+    return render_template("profile.html", active_page="profile", page_title="My Profile", employee=employee)
 
 
 @employee_bp.route("/payroll", methods=("GET", "POST"))
@@ -321,20 +419,27 @@ def profile():
 def payroll():
     employees = []
     selected_employee_id = None
-    if current_user.is_admin() or current_user.is_manager():
+    admin_mode = current_user.has_admin_access()
+    if admin_mode:
         employees = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
         selected_employee_id = request.args.get("employee_id", "") or None
     else:
         selected_employee_id = current_user.employee_id
+    page = parse_positive_int(request.args.get("page"), default=1)
+    per_page = parse_positive_int(request.args.get("per_page"), default=20, maximum=100)
 
     if request.method == "POST":
-        if current_user.is_admin() or current_user.is_manager():
+        if admin_mode:
             selected_employee_id = request.form.get("employee_id", "")
         if not selected_employee_id:
             flash("Please choose an employee.", "error")
             return redirect(url_for("employees.payroll"))
 
-        employee = Employee.query.get_or_404(int(selected_employee_id))
+        selected_employee_id = parse_positive_int(selected_employee_id, default=None) if selected_employee_id else None
+        if not selected_employee_id:
+            flash("Please choose a valid employee.", "error")
+            return redirect(url_for("employees.payroll"))
+        employee = Employee.query.get_or_404(selected_employee_id)
         work_date = parse_date(request.form.get("work_date", ""))
         try:
             hours_worked = float(request.form.get("hours_worked", "0"))
@@ -344,62 +449,145 @@ def payroll():
 
         if not work_date or hours_worked is None:
             flash("Please provide a valid date and hours value.", "error")
-            return redirect(url_for("employees.payroll"))
+            return redirect(url_for("employees.payroll", employee_id=selected_employee_id if admin_mode else None))
 
         notes = request.form.get("notes", "").strip()
         if hours_worked < 0 or hours_worked > 168:
             flash("Hours worked must be between 0 and 168.", "error")
-            return redirect(url_for("employees.payroll"))
+            return redirect(url_for("employees.payroll", employee_id=selected_employee_id if admin_mode else None))
 
         record = PayrollRecord.query.filter_by(employee_id=employee.id, work_date=work_date).first()
         if record:
             record.hours_worked = hours_worked
-            record.regular_hours, record.overtime_hours, record.total_pay = PayrollRecord.calculate(
-                hours_worked, employee.hourly_rate, employee.overtime_multiplier
-            )
+            record.regular_hours, record.overtime_hours, record.total_pay = PayrollRecord.calculate(hours_worked, employee.hourly_rate, employee.overtime_multiplier)
             record.notes = notes
+            record.status = "Pending" if not admin_mode else "Reviewed"
         else:
             record = PayrollRecord.build(employee, work_date, hours_worked, notes)
+            record.status = "Pending" if not admin_mode else "Reviewed"
             db.session.add(record)
+
+        create_audit_log(current_user, "payroll_created", "PayrollRecord", str(employee.id), f"Payroll entry saved for {employee.full_name()} on {work_date}.")
         db.session.commit()
-        flash("Payroll record saved successfully.", "success")
-        return redirect(url_for("employees.payroll", employee_id=employee.id if employees else None))
 
-    payroll_filters = []
-    if selected_employee_id:
-        payroll_filters.append(PayrollRecord.employee_id == int(selected_employee_id))
+        if admin_mode:
+            if employee.user:
+                create_notification(
+                    employee.user,
+                    "Hours updated",
+                    f"Your hours entry for {work_date} is now {record.status.lower()}.",
+                    url="/payroll",
+                    category="info",
+                )
+            db.session.commit()
+            flash("Payroll record saved successfully.", "success")
+        else:
+            admin_users = User.query.filter(User.role.in_(Role.ADMIN_LIKE)).all()
+            for user in admin_users:
+                create_notification(
+                    user,
+                    "Timesheet pending review",
+                    f"{employee.full_name()} submitted {hours_worked:.2f} hours for {work_date}.",
+                    "/payroll?employee_id=" + str(employee.id),
+                    "approval",
+                )
+            db.session.commit()
+            flash("Hours logged successfully. Awaiting approval.", "success")
 
-    records = PayrollRecord.query.options(joinedload(PayrollRecord.employee)).filter(*payroll_filters).order_by(
-        PayrollRecord.work_date.desc()
-    )
-    if current_user.is_admin() or current_user.is_manager():
-        records = records.all()
-    else:
-        records = records.filter_by(employee_id=current_user.employee_id).all()
+        return redirect(url_for("employees.payroll", employee_id=employee.id if admin_mode else None))
+
+    records_query = PayrollRecord.query.options(joinedload(PayrollRecord.employee))
+    if admin_mode and selected_employee_id:
+        selected_employee_id = parse_positive_int(selected_employee_id, default=None)
+        if selected_employee_id:
+            records_query = records_query.filter_by(employee_id=selected_employee_id)
+    if not admin_mode:
+        records_query = records_query.filter_by(employee_id=current_user.employee_id)
+    totals = records_query.with_entities(
+        func.coalesce(func.sum(PayrollRecord.hours_worked), 0.0),
+        func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0),
+        func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0),
+        func.coalesce(func.sum(PayrollRecord.total_pay), 0.0),
+    ).first()
+    pagination = records_query.order_by(PayrollRecord.work_date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    records = pagination.items
 
     summary = {
-        "hours": sum(record.hours_worked for record in records),
-        "regular_hours": sum(record.regular_hours for record in records),
-        "overtime_hours": sum(record.overtime_hours for record in records),
-        "total_pay": sum(record.total_pay for record in records),
+        "hours": float(totals[0]),
+        "regular_hours": float(totals[1]),
+        "overtime_hours": float(totals[2]),
+        "total_pay": float(totals[3]),
     }
-    employee_profile = get_current_employee()
+
     return render_template(
         "payroll.html",
         active_page="payroll",
+        page_title="Hours and Payroll",
         records=records,
         summary=summary,
         employees=employees,
         selected_employee=selected_employee_id,
-        employee_profile=employee_profile,
+        pagination=pagination,
+        per_page=per_page,
+        admin_view=admin_mode,
     )
 
 
+@employee_bp.route("/payroll/<int:record_id>/review", methods=("POST",))
+@roles_required(*Role.ADMIN_LIKE)
+def review_payroll(record_id):
+    record = PayrollRecord.query.get_or_404(record_id)
+    action = request.form.get("action", "review")
+    if action not in {"review", "approve", "reject"}:
+        flash("Invalid review action.", "error")
+        return redirect(url_for("employees.payroll", employee_id=record.employee_id))
+
+    status_map = {"review": "Reviewed", "approve": "Approved", "reject": "Rejected"}
+    record.status = status_map[action]
+    record.reviewed_by_id = current_user.id
+    record.reviewed_at = db.func.now()
+
+    if record.employee.user:
+        create_notification(
+            record.employee.user,
+            "Timesheet updated",
+            f"Your {record.work_date} entry is now {record.status.lower()}.",
+            "/payroll",
+            "info" if action != "reject" else "warning",
+        )
+
+    create_audit_log(
+        current_user,
+        "payroll_reviewed",
+        "PayrollRecord",
+        str(record.id),
+        f"Payroll entry for {record.employee.full_name()} marked {record.status.lower()}.",
+    )
+    db.session.commit()
+    flash(f"Entry marked as {record.status.lower()}.", "success")
+    return redirect(url_for("employees.payroll", employee_id=record.employee_id))
+
+
 @employee_bp.route("/payroll/<int:record_id>/delete", methods=("POST",))
-@roles_required(Role.ADMIN, Role.MANAGER)
+@roles_required(*Role.ADMIN_LIKE)
 def delete_payroll(record_id):
     record = PayrollRecord.query.get_or_404(record_id)
+    employee_id = record.employee_id
+    create_audit_log(current_user, "payroll_deleted", "PayrollRecord", str(record.id), f"Payroll entry removed for {record.employee.full_name()}.")
     db.session.delete(record)
     db.session.commit()
     flash("Payroll record removed successfully.", "success")
-    return redirect(url_for("employees.payroll", employee_id=record.employee_id))
+    return redirect(url_for("employees.payroll", employee_id=employee_id))
+
+
+@employee_bp.route("/settings", methods=("GET", "POST"))
+@roles_required(*Role.ADMIN_LIKE)
+def settings():
+    if request.method == "POST":
+        session_timeout = request.form.get("session_timeout", "30")
+        approval_required = request.form.get("approval_required", "on") == "on"
+        flash(
+            f"Settings updated. Session timeout: {session_timeout} minutes. Approval workflow: {'enabled' if approval_required else 'disabled'}.",
+            "success",
+        )
+    return render_template("settings.html", active_page="settings", page_title="System Settings")

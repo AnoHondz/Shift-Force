@@ -1,41 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Attendance{% endblock %}
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
   <div>
-    <h1 class="h3 mb-2">Attendance</h1>
-    <p class="text-muted">Clock in, clock out, and review attendance history for yourself or your team.</p>
+    <h2 class="h4 mb-1">Attendance Operations</h2>
+    <p class="text-muted mb-0">Clock activity and monitor shift completion across the workforce.</p>
   </div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
-    <div class="card shadow-sm p-4">
-      <h6 class="text-uppercase text-muted mb-3">Total records</h6>
-      <p class="display-6 mb-0">{{ total_records }}</p>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm p-4">
-      <h6 class="text-uppercase text-muted mb-3">Total hours</h6>
-      <p class="display-6 mb-0">{{ total_hours|hours }}</p>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm p-4">
-      <h6 class="text-uppercase text-muted mb-3">Currently clocked in</h6>
-      <p class="display-6 mb-0">{{ active_clock_ins }}</p>
-    </div>
-  </div>
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="kpi-card"><div class="kpi-label">Total Records</div><p class="kpi-value">{{ total_records }}</p></div></div>
+  <div class="col-md-4"><div class="kpi-card"><div class="kpi-label">Hours Logged</div><p class="kpi-value">{{ total_hours|hours }}</p></div></div>
+  <div class="col-md-4"><div class="kpi-card"><div class="kpi-label">Currently Clocked In</div><p class="kpi-value">{{ active_clock_ins }}</p></div></div>
 </div>
 
-<div class="card shadow-sm p-4 mb-4">
-  <h2 class="h5 mb-3">Attendance actions</h2>
-  <div class="row g-3">
-    {% if current_user.is_admin() or current_user.is_manager() %}
+<div class="surface-card mb-3">
+  <h3 class="h6">Attendance Actions</h3>
+  <div class="row g-2 mt-1">
+    {% if current_user.has_admin_access() %}
       <div class="col-md-4">
-        <label class="form-label" for="employee_id">Employee</label>
-        <select id="employee_id" class="form-select" form="attendance-action" name="employee_id">
+        <label class="form-label">Employee</label>
+        <select id="employee_id" class="form-select" form="clockInForm" name="employee_id">
           <option value="">Select employee</option>
           {% for member in employees %}
             <option value="{{ member.id }}" {% if selected_employee == member.id|string %}selected{% endif %}>{{ member.full_name() }}</option>
@@ -44,89 +29,54 @@
       </div>
     {% endif %}
     <div class="col-md-4">
-      <label class="form-label">Current status</label>
-      <div class="alert alert-secondary mb-0">
-        {% if active_record %}
-          {{ active_record.status }} since {{ active_record.clock_in_at.strftime('%Y-%m-%d %H:%M') }}
-        {% else %}
-          No active clock-in.
-        {% endif %}
-      </div>
+      <label class="form-label">Current Status</label>
+      <div class="status-badge status-{{ active_record.status|lower|replace(' ', '_') if active_record else 'active' }}">{{ active_record.status if active_record else 'No active clock-in' }}</div>
     </div>
     <div class="col-md-4 d-flex align-items-end gap-2">
-      <form id="attendance-action" method="post" class="d-flex gap-2 w-100">
-        <input type="hidden" name="action" value="clock_in" />
-        <button type="submit" class="btn btn-primary w-100">Clock In</button>
-      </form>
-      <form method="post" class="d-flex gap-2 w-100">
-        <input type="hidden" name="action" value="clock_out" />
-        <button type="submit" class="btn btn-outline-primary w-100">Clock Out</button>
-      </form>
+      <form id="clockInForm" method="post" class="w-100"><input type="hidden" name="action" value="clock_in" /><button type="submit" class="btn btn-primary w-100">Clock In</button></form>
+      <form method="post" class="w-100"><input type="hidden" name="action" value="clock_out" /><button type="submit" class="btn btn-ghost w-100">Clock Out</button></form>
     </div>
   </div>
 </div>
 
-<div class="card shadow-sm p-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h2 class="h5">Attendance history</h2>
-      <p class="text-muted mb-0">Filter by employee and date range when you have manager access.</p>
-    </div>
-    <form method="get" class="row g-2 gx-3 align-items-end">
-      {% if current_user.is_admin() or current_user.is_manager() %}
-        <div class="col-auto">
-          <label class="form-label visually-hidden" for="filter_employee">Employee</label>
-          <select id="filter_employee" name="employee_id" class="form-select">
-            <option value="">All employees</option>
-            {% for member in employees %}
-              <option value="{{ member.id }}" {% if selected_employee == member.id|string %}selected{% endif %}>{{ member.full_name() }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      {% endif %}
-      <div class="col-auto">
-        <label class="form-label visually-hidden" for="start_date">Start Date</label>
-        <input id="start_date" name="start_date" type="date" class="form-control" value="{{ start_date }}" />
+<div class="surface-card">
+  <h3 class="h6">Attendance History</h3>
+  <form method="get" class="row g-2 mb-2">
+    {% if current_user.has_admin_access() %}
+      <div class="col-md-4">
+        <select name="employee_id" class="form-select">
+          <option value="">All employees</option>
+          {% for member in employees %}
+            <option value="{{ member.id }}" {% if selected_employee == member.id|string %}selected{% endif %}>{{ member.full_name() }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="col-auto">
-        <label class="form-label visually-hidden" for="end_date">End Date</label>
-        <input id="end_date" name="end_date" type="date" class="form-control" value="{{ end_date }}" />
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-outline-secondary">Apply</button>
-      </div>
-    </form>
-  </div>
+    {% endif %}
+    <div class="col-md-3"><input type="date" name="start_date" class="form-control" value="{{ start_date }}" /></div>
+    <div class="col-md-3"><input type="date" name="end_date" class="form-control" value="{{ end_date }}" /></div>
+    <div class="col-md-2"><button class="btn btn-ghost w-100" type="submit">Filter</button></div>
+  </form>
 
   {% if records %}
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Date</th>
-            <th>Employee</th>
-            <th>Clock In</th>
-            <th>Clock Out</th>
-            <th>Hours</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Date</th><th>Employee</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Status</th></tr></thead>
         <tbody>
           {% for record in records %}
             <tr>
               <td>{{ record.date }}</td>
               <td>{{ record.employee.full_name() }}</td>
               <td>{{ record.clock_in_at.strftime('%H:%M') }}</td>
-              <td>{{ record.clock_out_at.strftime('%H:%M') if record.clock_out_at else '—' }}</td>
+              <td>{{ record.clock_out_at.strftime('%H:%M') if record.clock_out_at else '-' }}</td>
               <td>{{ record.hours_worked|hours }}</td>
-              <td>{{ record.status }}</td>
+              <td><span class="status-badge status-{{ record.status|lower|replace(' ', '_') }}">{{ record.status }}</span></td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% else %}
-    <div class="alert alert-secondary">No attendance records found for the selected filters.</div>
+    <div class="text-muted">No attendance records for the selected filters.</div>
   {% endif %}
 </div>
 {% endblock %}
