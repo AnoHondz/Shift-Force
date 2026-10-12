@@ -1,3 +1,4 @@
+-- Historical schema retained for compatibility tests. Initialize new databases with `flask db upgrade`.
 CREATE TABLE departments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
