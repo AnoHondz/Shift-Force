@@ -1,120 +1,197 @@
-# Workforce Platform (Flask)
+# Workforce Platform
 
-A production-minded employee operations platform built with Flask, focused on realistic internal workflows: role-based access, approvals, payroll, leave, reporting, notifications, and auditability.
+A full-stack employee operations application built with Python and Flask. It brings employee records, time entries, attendance, leave approvals, notifications, and payroll estimates into one role-aware workspace.
 
-This project is designed to demo strong full-stack engineering fundamentals for internship and early-career software roles, with emphasis on product thinking, clean architecture, and polished UI execution.
+Built by **Anotida Hondonga** as a software engineering portfolio project. The existing Flask/Jinja architecture is preserved and strengthened with explicit migrations, tested business rules, and safer administration.
 
-## Why This Project
+**Status:** verified local demo and portfolio build. Production use requires credential rotation, reconciliation of imported payroll, deployment review, and jurisdiction-specific payroll validation. No public deployment is included.
 
-Many portfolio CRUD apps stop at basic create/read/update/delete flows. This platform models how internal business systems actually work:
+![Workforce dashboard with synthetic records](docs/screenshots/dashboard.png)
 
-1. Different roles need different access and dashboards.
-2. Operational actions require review and approval states.
-3. Teams need visibility through reporting, notifications, and audit logs.
-4. UX quality matters even for internal enterprise software.
+## The problem
 
-## Core Capabilities
+Small teams often track employee details, hours, attendance, and leave in separate spreadsheets. This application connects those workflows, gives employees a personal workspace, and gives authorized staff review tools and an audit trail.
 
-1. Role-aware authentication and authorization
-2. Distinct admin-like and employee experiences
-3. Employee directory with filtering, sorting, and status context
-4. Payroll and hours workflows with review and approval states
-5. Leave request submission and manager/admin review flows
-6. Attendance tracking and activity visibility
-7. Notifications center for approvals and system updates
-8. Audit trail for key operational and security events
-9. Dashboard analytics with KPI cards and charts
-10. CSV and PDF report exports for payroll/reporting use cases
+## Features
 
-## Role-Based Architecture
+- Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
+- Employee-only registration, hashed passwords, CSRF-protected sessions, login throttling, and explicit CLI administration.
+- Daily timesheet totals, Monday–Sunday overtime allocation, decimal monetary calculations, submitted rate snapshots, and approval resets after corrections.
+- Clock-in/out with UTC storage, configurable display timezone, and a database constraint preventing duplicate active shifts.
+- Leave date validation, overlap prevention at both application and database levels, authorized reviews, and self-approval protection.
+- Private notification inboxes, searchable audit logs, charts, and CSV/PDF exports with empty-dataset handling.
+- Paginated, authenticated read-only JSON APIs for employees, payroll, and attendance.
+- Responsive Bootstrap/Jinja screens with local frontend assets, accessible focus states, clear errors, and mobile directory cards.
 
-The system supports multiple roles (executive, admin, HR, payroll, manager, employee) and enforces permission boundaries at the route and UI levels.
+## Stack and architecture
 
-1. Admin-like roles can access management dashboards, audit logs, workforce operations, and review actions.
-2. Employee users are scoped to personal workflows (hours, leave, profile, notifications, team directory).
-3. Public sign-up is restricted to employee accounts to avoid privilege escalation.
+Python **3.12** is the verified runtime. Flask, Flask-Login, Flask-WTF, Flask-Limiter, SQLAlchemy, SQLite, Flask-Migrate/Alembic, Jinja2, Bootstrap, Chart.js, ReportLab, Pytest, Ruff, Bandit, and GitHub Actions.
 
-## Enterprise Workflow Coverage
+```mermaid
+flowchart LR
+    Browser[Browser: Jinja + Bootstrap + Chart.js] --> Flask[Flask application factory]
+    Client[Authenticated JSON client] --> Flask
+    Flask --> Guards[Session, CSRF, role and ownership checks]
+    Guards --> Routes[Blueprint routes]
+    Routes --> Rules[Payroll rules and ORM models]
+    Rules --> SQLite[(SQLite)]
+    CLI[Trusted administration CLI] --> Rules
+    Alembic[Versioned migrations] --> SQLite
+    Routes --> Reports[CSV and PDF reporting]
+```
 
-1. Payroll lifecycle: submit/update hours, mark reviewed, approve/reject, notify stakeholders.
-2. Leave lifecycle: submit request, approve/reject, communicate updates.
-3. Notification lifecycle: unread/read states, filtered views, role-aware inbox behavior.
-4. Audit lifecycle: log meaningful security and business actions for governance.
+`app/` contains the factory, domain models, payroll rules, shared validation, and blueprints. `app/templates/` and `app/static/` provide the frontend. `migrations/` owns database changes; startup never mutates the schema. `tests/` exercises behavior and security. `scripts/` contains browser verification, safe environment setup, backup, and tracked-file checks.
 
-## Tech Stack
+## Database design
 
-1. Python 3
-2. Flask
-3. Flask-Login
-4. Flask-SQLAlchemy
-5. SQLite
-6. Jinja2 templates
-7. Bootstrap 5 + custom CSS design system
-8. Chart.js (dashboard/report visualizations)
-9. ReportLab (PDF report export)
-10. Pytest (smoke and behavior tests)
+Eight domain tables model departments, employees, users, payroll records, attendance records, leave requests, notifications, and audit logs.
 
-## Project Structure
+```mermaid
+erDiagram
+    DEPARTMENT ||--o{ EMPLOYEE : contains
+    EMPLOYEE ||--o| USER : has_account
+    EMPLOYEE ||--o{ PAYROLL_RECORD : submits
+    EMPLOYEE ||--o{ ATTENDANCE : clocks
+    EMPLOYEE ||--o{ LEAVE_REQUEST : requests
+    USER ||--o{ NOTIFICATION : receives
+    USER o|--o{ AUDIT_LOG : performs
+    USER o|--o{ PAYROLL_RECORD : reviews
+    USER o|--o{ LEAVE_REQUEST : reviews
+```
 
-1. app/: application package
-2. app/routes/: blueprint-based routing modules (auth, employees, payroll, leave, reports, notifications, audit, attendance)
-3. app/models.py: domain and workflow models
-4. app/templates/: cohesive UI templates and reusable components
-5. app/static/css/site.css: shared visual system and page-level polish
-6. tests/: auth, RBAC, and reporting/payroll test coverage
-7. run.py: local entry point
+Foreign keys are enforced on SQLite connections. Unique daily payroll entries and active shifts, monetary/date constraints, indexes, leave overlap triggers, and optimistic versions for payroll/leave protect data integrity. Employee archival disables associated login access and retains history. Payroll voiding retains the row and recalculates its workweek.
 
-## Local Setup
+## Authentication and permissions
 
-1. Clone and enter the repo
-   - git clone <repo-url>
-   - cd employee-Data-base
-2. Create and activate a virtual environment
-   - python -m venv .venv
-   - source .venv/bin/activate
-3. Install dependencies
-   - pip install -r requirements.txt
-4. Start the app
-   - python run.py
-5. Open in browser
-   - http://127.0.0.1:5000
+Registration always creates an employee role and cannot claim an existing employee email. It is disabled by default in production. Elevated roles are assigned using `flask set-role` by someone with trusted server access.
 
-## Test Suite
+| Action | Employee | Manager | HR | Payroll | Admin / Executive |
+|---|---|---|---|---|---|
+| Personal profile, leave, inbox | Own | Own | Own | Own | Own |
+| Workforce/report/API read access | Own operations; team directory | Organization | Organization | Organization | Organization |
+| Create/edit employee records | — | — | Yes | — | Yes |
+| Archive employee records | — | — | — | — | Yes |
+| Review payroll / log another employee's hours | — | Yes | — | Yes | Yes |
+| Review leave / attendance actions for others | — | Yes | Yes | — | Yes |
 
-Run the test suite from repo root:
+Every inbox remains private, including administrator inboxes. Reviewers cannot approve their own payroll or leave. Management read access is organization-wide; department-level manager scoping is a future improvement.
 
-1. PYTHONPATH=. pytest -q
+## Install and run a fresh local demo
 
-Current coverage includes:
+These steps apply to a **fresh clone**. For an existing installation, follow [migration and backup instructions](docs/MIGRATIONS.md) first.
 
-1. Auth page rendering and signup flow smoke tests
-2. Login/logout and RBAC behavior checks
-3. Payroll review permission tests
-4. Report export and notification scope tests
+```powershell
+git clone https://github.com/AnoHondz/employee-Data-base.git
+cd employee-Data-base
+git checkout codex/workforce-production-readiness
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+python -m scripts.configure_environment
+python -m flask --app run db upgrade
+python -m flask --app run seed-demo
+python run.py
+```
 
-## Screenshots (Placeholders)
+Open **http://127.0.0.1:5000**. `seed-demo` creates synthetic employees and generates a fresh password for each of `demo.admin`, `demo.employee`, and `demo.manager`, displayed once in your terminal. There is no shared demo password. Seeding refuses a populated database and is disabled in production.
 
-Add screenshots in this section for portfolio presentation:
+On macOS/Linux, use `python3.12 -m venv .venv` and `source .venv/bin/activate`; the remaining Python commands are identical. Install `requirements.txt` if you only need the application; `requirements-dev.txt` adds verification tools.
 
-1. Auth experience (sign-in/sign-up)
-2. Admin dashboard
-3. Employee workspace dashboard
-4. Payroll review workflow
-5. Reports and exports
-6. Notifications + audit trail
+To create your own local administrator instead of demo data:
 
-## Recruiter-Friendly Highlights
+```text
+python -m flask --app run create-admin
+```
 
-1. Built a multi-role Flask platform with route-level access control and role-specific dashboard experiences.
-2. Implemented realistic operational workflows for payroll and leave approvals with status transitions and user notifications.
-3. Designed a cohesive template/component system with polished enterprise UI patterns across dashboards, forms, and data tables.
-4. Added auditability and reporting features (CSV/PDF exports, activity logs, notification center) to reflect production system expectations.
-5. Wrote and validated behavior-focused tests for authentication, RBAC, payroll review paths, and reporting endpoints.
+The CLI prompts for username, email, and a hidden, confirmed password of 12–128 characters. It never runs at startup. Password changes and role assignments are explicit:
 
-## Future Enhancements
+```text
+python -m flask --app run reset-password USERNAME
+python -m flask --app run set-role USERNAME manager
+```
 
-1. Add timezone-aware datetime handling and SQLAlchemy 2.x modernization cleanup.
-2. Expand test coverage for edge-case business rules and route-level regressions.
-3. Add richer analytics (trend comparisons and anomaly indicators).
-4. Introduce configurable approval policies by department or role.
-5. Add CI pipeline with linting, tests, and quality gates.
+## Configuration
+
+`.env.example` contains placeholders only. `scripts.configure_environment` creates `.env` with a fresh random secret and refuses to overwrite an existing file. Environment variables override `.env` values.
+
+| Variable | Purpose |
+|---|---|
+| `FLASK_SECRET_KEY` | Required random secret, at least 32 characters; use 64 hex characters |
+| `APP_ENV` | `development` or `production`; production enables secure cookies and disables public registration |
+| `DATABASE_URL` | Absolute SQLite URL; defaults to `instance/workforce.db` |
+| `WORKFORCE_TIMEZONE` | IANA timezone used for attendance day/display; defaults to `UTC` |
+| `RATELIMIT_STORAGE_URI` | `memory://` locally; production requires shared storage such as Redis |
+
+Production startup rejects missing/short secrets, debug mode, insecure cookies, and in-memory rate-limit storage. Use an HTTPS reverse proxy, a suitable WSGI server, private storage, and verified backups before production deployment. The bundled server binds to localhost and disables debug.
+
+## Payroll and attendance rules
+
+An entry represents the **total of all shifts on one work date**, with 0–24 hours and at most two decimal places. Saving the same employee/date replaces that daily total, rather than creating duplicates. Dates cannot be in the future.
+
+The workweek runs **Monday through Sunday**. The first 40 hours are regular hours; later hours use the employee's submitted overtime multiplier. For five 9-hour days at $30/hour and 1.5× overtime: 40 regular hours + 5 overtime hours = **$1,425.00**. Corrections recalculate the whole affected week and reset changed approvals. A selected reporting pay period never resets a workweek's overtime threshold.
+
+Money uses `Decimal` with half-up cent rounding and submitted compensation snapshots. Reports exclude rejected/voided entries; pending/reviewed entries remain estimates. Payroll and leave updates use optimistic versions to prevent stale reviews from overwriting corrections.
+
+Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries; daily timesheet totals remain a separate review workflow. Overnight shifts must be allocated to work dates when submitting timesheets. A trusted operator can reconcile incorrect or stale shifts using `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
+
+## Testing and quality
+
+```text
+python -m pytest -q
+python -m ruff check app tests scripts migrations config.py run.py
+python -m ruff format --check app tests scripts migrations config.py run.py
+python -m bandit -r app config.py run.py
+python -m scripts.security_check
+python -m pip_audit -r requirements.txt
+python -m playwright install chromium
+python -m scripts.browser_smoke
+```
+
+Tests use disposable databases and freshly generated credentials. The GitHub Actions workflow runs these checks on pushes and pull requests. Local verification results and scope are recorded in [verification notes](docs/VERIFICATION.md); a successful local run does not imply that GitHub CI or a production deployment has passed.
+
+## Screenshots
+
+Captured from the running application with synthetic records on October 12, 2026:
+
+| Screen | Preview |
+|---|---|
+| Login | [Screenshot](docs/screenshots/login.png) |
+| Employee workspace | [Screenshot](docs/screenshots/employee-workspace.png) |
+| Directory and employee profile | [Directory](docs/screenshots/employees.png) · [Profile](docs/screenshots/employee-profile.png) |
+| Payroll | [Screenshot](docs/screenshots/payroll.png) |
+| Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |
+| Notifications, reporting, audit | [Inbox](docs/screenshots/notifications.png) · [Reports](docs/screenshots/reports.png) · [Audit](docs/screenshots/audit.png) |
+| Mobile | [Dashboard](docs/screenshots/dashboard-mobile.png) · [Directory](docs/screenshots/employees-mobile.png) · [Payroll](docs/screenshots/payroll-mobile.png) |
+
+Regenerate only from a successful run using `python -m scripts.browser_smoke --screenshots`.
+
+## Security, migrations, and limitations
+
+Earlier Git history contains `.env`, SQLite databases, and hardcoded credentials. Current tracking excludes them, but history is unchanged. **Rotate all exposed secrets and account passwords before using a migrated installation.** See [security and rotation instructions](docs/SECURITY.md), [audit findings](docs/AUDIT.md), and [migration procedures](docs/MIGRATIONS.md).
+
+The migration preserves imported payroll totals and marks them for reconciliation because the old app mixed daily and weekly hours. Imported entries are read-only in the browser. No existing database is reset, and destructive downgrades are refused; rollback uses verified backups and the matching previous code.
+
+Known limitations: payroll estimates exclude taxes, deductions, benefits, holiday rules, and jurisdiction-specific compliance; manager read access is organization-wide; notifications are in-app only; no SSO/MFA/email verification or email password recovery; SQLite and report exports are suitable for modest datasets, without large-scale concurrency/performance claims. Inline template scripts currently require an `unsafe-inline` CSP allowance. Production infrastructure and shared Redis rate limiting have not been exercised here.
+
+## Portfolio description and verified résumé bullets
+
+**Workforce Platform:** a Flask/SQLAlchemy application connecting employee management, timesheet review, attendance, leave approval, reporting, and audit workflows, with a responsive Jinja/Bootstrap interface and automated security/business-rule verification.
+
+- Strengthened a Flask employee operations platform with role and ownership checks, CSRF protection, login throttling, private notifications, and explicit administrator provisioning.
+- Implemented workweek-aware decimal payroll calculations, rate snapshots, correction-driven approval resets, and record-preserving SQLite migrations with integrity checks.
+- Built automated workflow and security regression tests, a Chromium browser verification script, GitHub Actions quality checks, and recruiter-facing documentation with real application screenshots.
+
+## Future improvements
+
+Department-scoped manager permissions; MFA/SSO and email verification; explicit reconciliation tooling for imported weekly payroll; PostgreSQL migrations and load testing; nonce-based CSP and extracted scripts; payroll policy validation for a chosen jurisdiction; automated attendance-to-timesheet allocation with approved timezone rules.
+
+## Troubleshooting
+
+- **Secret validation error:** regenerate a random secret and set `FLASK_SECRET_KEY` in `.env`; previously exported environment variables take precedence.
+- **No such table:** run `python -m flask --app run db upgrade` against the intended `DATABASE_URL`.
+- **Environment setup refuses to run:** `.env` already exists; preserve it and update its configuration manually.
+- **Demo seed refuses to run:** the database already contains records. Create an administrator explicitly or use a separate new demo database; never reset existing data.
+- **CSRF error:** refresh the form and retry; cookies must be enabled. Logout is a POST action through the Sign out button.
+- **Imported payroll blocks a correction:** reconcile the historical entry's daily/weekly meaning using original timesheets, as described in the migration guide.
+- **PowerShell activation blocked:** invoke `.\.venv\Scripts\python.exe` directly in place of `python`; activation is optional.
+- **Browser verification cannot launch Chromium:** run `python -m playwright install chromium`; on Linux CI use `--with-deps`.
