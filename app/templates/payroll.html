@@ -56,7 +56,8 @@
     <span class="meta-inline"><i class="bi bi-clock-history"></i>Most recent updates first</span>
   </div>
   {% if records %}
-    <div class="table-responsive">
+    <p class="small text-muted d-md-none">Scroll the table to see status and review actions.</p>
+    <div class="table-responsive" tabindex="0" role="region" aria-label="Payroll entries">
       <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
@@ -72,7 +73,7 @@
         <tbody>
           {% for record in records %}
             <tr>
-              <td>{{ record.work_date }}</td>
+              <td class="text-nowrap">{{ record.work_date }}</td>
               {% if admin_view %}<td>{{ record.employee.full_name() }}</td>{% endif %}
               <td>{{ record.hours_worked|hours }}</td>
               <td>{{ record.overtime_hours|hours }}</td>

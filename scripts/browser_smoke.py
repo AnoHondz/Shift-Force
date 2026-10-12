@@ -20,8 +20,9 @@ from app.models import Attendance, Employee, PayrollRecord, User, utcnow
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--screenshots", action="store_true")
+    parser.add_argument("--screenshot-dir", type=Path, default=Path("docs/screenshots"))
     options = parser.parse_args()
-    screenshots = Path("docs/screenshots")
+    screenshots = options.screenshot_dir
     if options.screenshots:
         screenshots.mkdir(parents=True, exist_ok=True)
 
@@ -188,6 +189,19 @@ def main():
                     assert page.evaluate(
                         "document.documentElement.scrollWidth <= window.innerWidth"
                     ), path
+                    if path == "/payroll":
+                        region = page.get_by_role("region", name="Payroll entries")
+                        assert region.evaluate("el => el.scrollWidth > el.clientWidth")
+                        assert region.locator("tbody td.text-nowrap").first.evaluate(
+                            """el => {
+                                const text = document.createRange();
+                                text.selectNodeContents(el);
+                                return text.getClientRects().length === 1;
+                            }"""
+                        ), "Payroll dates should remain readable on one line."
+                        region.evaluate("el => el.scrollLeft = el.scrollWidth")
+                        assert region.evaluate("el => el.scrollLeft > 0")
+                        region.evaluate("el => el.scrollLeft = 0")
                     capture(page, name)
                 completed.append(
                     "Mobile dashboard, directory and payroll: no horizontal page overflow"

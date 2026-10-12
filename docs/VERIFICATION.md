@@ -26,4 +26,6 @@ Local results are observed executions, not a claim that production operation or 
 
 GitHub Actions runs the same test, lint, format, security, dependency, and browser commands on Python 3.12/Ubuntu. Its result must be read from the pull request; local results alone do not establish a successful hosted CI run.
 
+Hosted CI also completed successfully for the initial implementation commit `0b5cbbc`: [Ubuntu quality checks](https://github.com/AnoHondz/employee-Data-base/actions/runs/38250770446). Later commits run the workflow again; consult the pull request's current checks. A final mobile review added readable, internally scrolling tables and browser assertions that payroll dates occupy one line and the table can be scrolled.
+
 Before production adoption, rotate previously exposed credentials, complete imported-payroll reconciliation, review organization-wide management access, and verify production infrastructure and backups. See [SECURITY.md](SECURITY.md), [MIGRATIONS.md](MIGRATIONS.md), and [BUSINESS_RULES.md](BUSINESS_RULES.md).

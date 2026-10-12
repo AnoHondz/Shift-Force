@@ -28,6 +28,7 @@ td, dd, .list-group-item { overflow-wrap: anywhere; }
   .auth-brand-premium { display: none; }
   .auth-card-premium { padding: 1.1rem; }
   .table-responsive { overscroll-behavior-inline: contain; }
+  .table-responsive > table { min-width: 640px; }
   .page-head-actions, .page-head-actions .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
