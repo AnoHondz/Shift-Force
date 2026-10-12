@@ -16,11 +16,12 @@
 
 <div class="surface-card mb-3">
   <h3 class="h6">Attendance Actions</h3>
-  <div class="row g-2 mt-1">
+  {% if not current_user.has_admin_access() or current_user.role in Role.LEAVE_REVIEW %}
+  <form id="clockInForm" method="post" class="row g-2 mt-1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% if current_user.has_admin_access() %}
       <div class="col-md-4">
         <label class="form-label">Employee</label>
-        <select id="employee_id" class="form-select" form="clockInForm" name="employee_id">
+        <select id="employee_id" class="form-select" name="employee_id" required>
           <option value="">Select employee</option>
           {% for member in employees %}
             <option value="{{ member.id }}" {% if selected_employee == member.id|string %}selected{% endif %}>{{ member.full_name() }}</option>
@@ -33,10 +34,11 @@
       <div class="status-badge status-{{ active_record.status|lower|replace(' ', '_') if active_record else 'active' }}">{{ active_record.status if active_record else 'No active clock-in' }}</div>
     </div>
     <div class="col-md-4 d-flex align-items-end gap-2">
-      <form id="clockInForm" method="post" class="w-100"><input type="hidden" name="action" value="clock_in" /><button type="submit" class="btn btn-primary w-100">Clock In</button></form>
-      <form method="post" class="w-100"><input type="hidden" name="action" value="clock_out" /><button type="submit" class="btn btn-ghost w-100">Clock Out</button></form>
+      <button type="submit" name="action" value="clock_in" class="btn btn-primary w-100">Clock In</button>
+      <button type="submit" name="action" value="clock_out" class="btn btn-ghost w-100">Clock Out</button>
     </div>
-  </div>
+  </form>
+  {% else %}<p class="text-muted">Your role can view attendance. Attendance actions require HR, manager, administrator, or executive access.</p>{% endif %}
 </div>
 
 <div class="surface-card">
@@ -44,7 +46,7 @@
   <form method="get" class="row g-2 mb-2">
     {% if current_user.has_admin_access() %}
       <div class="col-md-4">
-        <select name="employee_id" class="form-select">
+        <select name="employee_id" class="form-select" aria-label="Filter employee">
           <option value="">All employees</option>
           {% for member in employees %}
             <option value="{{ member.id }}" {% if selected_employee == member.id|string %}selected{% endif %}>{{ member.full_name() }}</option>
@@ -52,8 +54,8 @@
         </select>
       </div>
     {% endif %}
-    <div class="col-md-3"><input type="date" name="start_date" class="form-control" value="{{ start_date }}" /></div>
-    <div class="col-md-3"><input type="date" name="end_date" class="form-control" value="{{ end_date }}" /></div>
+    <div class="col-md-3"><input type="date" name="start_date" aria-label="Start date filter" class="form-control" value="{{ start_date }}" /></div>
+    <div class="col-md-3"><input type="date" name="end_date" aria-label="End date filter" class="form-control" value="{{ end_date }}" /></div>
     <div class="col-md-2"><button class="btn btn-ghost w-100" type="submit">Filter</button></div>
   </form>
 
@@ -66,8 +68,8 @@
             <tr>
               <td>{{ record.date }}</td>
               <td>{{ record.employee.full_name() }}</td>
-              <td>{{ record.clock_in_at.strftime('%H:%M') }}</td>
-              <td>{{ record.clock_out_at.strftime('%H:%M') if record.clock_out_at else '-' }}</td>
+              <td>{{ record.clock_in_at|localtime }}</td>
+              <td>{{ record.clock_out_at|localtime }}</td>
               <td>{{ record.hours_worked|hours }}</td>
               <td><span class="status-badge status-{{ record.status|lower|replace(' ', '_') }}">{{ record.status }}</span></td>
             </tr>

@@ -11,7 +11,7 @@
 <div class="row g-3">
   <div class="col-xl-8">
     <div class="surface-card">
-      <form method="post" class="row g-3 form-shell">
+      <form method="post" class="row g-3 form-shell"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="col-12"><h3 class="h6 mb-0">Personal Information</h3></div>
         <div class="col-md-6">
           <label class="form-label">First Name</label>
@@ -89,11 +89,6 @@
       <div class="small text-muted mt-3">Tip: Add schedule and compensation values for accurate payroll and reporting output.</div>
     </div>
 
-    <div class="surface-card">
-      <h3 class="h6">Compensation History</h3>
-      <p class="small text-muted mb-1">Compensation revision tracking can be layered onto payroll history for audit readiness.</p>
-      <div class="status-badge status-pending">History placeholder enabled</div>
-    </div>
   </div>
 </div>
 {% endblock %}

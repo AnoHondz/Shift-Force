@@ -3,7 +3,7 @@
 {% block title %}{{ page_title }}{% endblock %}
 {% block content %}
 {% call ui.page_header('Workforce Directory', 'Search, filter, and manage workforce records.') %}
-  {% if admin_view %}
+  {% if current_user.role in Role.PEOPLE_EDIT %}
     <a class="btn btn-primary" href="{{ url_for('employees.add_employee') }}">Add Employee</a>
   {% endif %}
 {% endcall %}
@@ -91,16 +91,7 @@
       </thead>
       <tbody>
         {% for employee in employees %}
-          {% set status = 'active' %}
-          {% set days_since_hire = (today - employee.date_hired).days if employee.date_hired else 999 %}
-          {% if days_since_hire <= 90 %}
-            {% set status = 'probation' %}
-          {% endif %}
-          {% for leave in employee.leave_requests %}
-            {% if leave.status == 'Approved' and leave.start_date <= today and leave.end_date >= today %}
-              {% set status = 'on_leave' %}
-            {% endif %}
-          {% endfor %}
+          {% set status = employee.workforce_status(today) %}
           <tr>
             <td>
               <div class="d-flex align-items-center gap-2">
@@ -116,16 +107,16 @@
             <td><span class="status-badge status-{{ status }}">{{ status.replace('_', ' ').title() }}</span></td>
             <td>{{ employee.hourly_rate|currency }} / hr</td>
             <td class="text-end">
-              {% if admin_view %}
+              {% if current_user.role in Role.PEOPLE_EDIT %}
                 <div class="dropdown">
                   <button class="btn btn-sm btn-ghost dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="{{ url_for('employees.profile') }}">View Profile</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('employees.employee_detail', employee_id=employee.id) }}">View Profile</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}">Edit</a></li>
-                    <li><a class="dropdown-item" href="mailto:{{ employee.email }}">Reset Password</a></li>
-                    {% if current_user.role in ['admin', 'executive'] %}
+                    <li><a class="dropdown-item" href="mailto:{{ employee.email }}">Contact</a></li>
+                    {% if current_user.role in ['admin', 'executive'] and employee.id != current_user.employee_id %}
                       <li>
-                        <form method="post" action="{{ url_for('employees.delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Archive this employee record?');">
+                        <form method="post" action="{{ url_for('employees.delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Archive this employee record?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                           <button class="dropdown-item text-danger" type="submit">Archive</button>
                         </form>
                       </li>
@@ -173,9 +164,9 @@
               <div class="small text-muted">{{ employee.job_title }}</div>
               <div class="small text-muted">{{ employee.department.name if employee.department else 'Unassigned' }}</div>
             </div>
-            <span class="status-badge status-active">Active</span>
+            <span class="status-badge status-{{ employee.workforce_status(today) }}">{{ employee.workforce_status(today).replace('_', ' ').title() }}</span>
           </div>
-          {% if admin_view %}
+          {% if current_user.role in Role.PEOPLE_EDIT %}
             <div class="mt-3 d-flex gap-2">
               <a class="btn btn-sm btn-primary" href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}">Edit</a>
               <a class="btn btn-sm btn-ghost" href="mailto:{{ employee.email }}">Contact</a>

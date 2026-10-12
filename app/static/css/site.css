@@ -51,7 +51,7 @@
 
 body {
   margin: 0;
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--text-main);
   background: radial-gradient(circle at top right, rgba(255, 93, 45, 0.07) 0%, transparent 40%),
     radial-gradient(circle at bottom left, rgba(35, 80, 200, 0.07) 0%, transparent 38%),
@@ -64,7 +64,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Manrope", sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   letter-spacing: -0.01em;
   color: inherit;
 }

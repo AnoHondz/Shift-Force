@@ -3,7 +3,7 @@
 {% block title %}Notification Center{% endblock %}
 {% block content %}
 {% call ui.page_header('Notification and Approval Center', 'Review action items, alerts, and completed workflow updates.') %}
-  <form method="post" action="{{ url_for('notifications.mark_all_read') }}">
+  <form method="post" action="{{ url_for('notifications.mark_all_read') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <button type="submit" class="btn btn-ghost">Mark All Read</button>
   </form>
 {% endcall %}
@@ -51,7 +51,7 @@
           </div>
           <div class="d-flex gap-1">
             {% if not note.is_read %}
-              <form method="post" action="{{ url_for('notifications.mark_read', notification_id=note.id) }}"><button class="btn btn-sm btn-primary" type="submit">Mark Read</button></form>
+              <form method="post" action="{{ url_for('notifications.mark_read', notification_id=note.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-sm btn-primary" type="submit">Mark Read</button></form>
             {% else %}
               <span class="small text-muted">Completed</span>
             {% endif %}

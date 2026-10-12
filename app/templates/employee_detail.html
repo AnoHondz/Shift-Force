@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "_components.html" as ui %}
+{% block title %}{{ employee.full_name() }} · Workforce{% endblock %}
+{% block content %}
+{% call ui.page_header(employee.full_name(), employee.job_title) %}
+  <a class="btn btn-ghost" href="{{ url_for('employees.employee_directory') }}">Back to directory</a>
+  {% if current_user.role in Role.PEOPLE_EDIT %}<a class="btn btn-primary" href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}">Edit employee</a>{% endif %}
+{% endcall %}
+<div class="surface-card">
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Department</dt><dd class="col-sm-8">{{ employee.department.name if employee.department else 'Unassigned' }}</dd>
+    <dt class="col-sm-4">Email</dt><dd class="col-sm-8">{{ employee.email }}</dd>
+    <dt class="col-sm-4">Phone</dt><dd class="col-sm-8">{{ employee.phone or 'Not provided' }}</dd>
+    <dt class="col-sm-4">Schedule</dt><dd class="col-sm-8">{{ employee.schedule }}</dd>
+    <dt class="col-sm-4">Hourly rate</dt><dd class="col-sm-8">{{ employee.hourly_rate|currency }}</dd>
+    <dt class="col-sm-4">Hired</dt><dd class="col-sm-8">{{ employee.date_hired }}</dd>
+    <dt class="col-sm-4">Account role</dt><dd class="col-sm-8">{{ role_label(employee.user.role) if employee.user else 'No account' }}</dd>
+    <dt class="col-sm-4">Record</dt><dd class="col-sm-8">{{ 'Archived' if employee.archived else 'Active' }}</dd>
+  </dl>
+</div>
+{% endblock %}

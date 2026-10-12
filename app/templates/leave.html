@@ -27,9 +27,9 @@
               <td>{{ request.submitted_at.strftime('%Y-%m-%d') }}</td>
               {% if current_user.has_admin_access() %}
                 <td class="text-end">
-                  {% if request.status == 'Pending' %}
-                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
-                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
+                  {% if request.status == 'Pending' and current_user.role in Role.LEAVE_REVIEW and request.employee_id != current_user.employee_id %}
+                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
+                    <form method="post" action="{{ url_for('leave.review', request_id=request.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
                   {% else %}
                     <span class="small text-muted">Reviewed</span>
                   {% endif %}

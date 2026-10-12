@@ -4,9 +4,9 @@
 <div class="auth-layout auth-premium">
   <section class="auth-brand-premium">
     <div class="auth-brand-top">
-      <div class="auth-logo-badge">SP</div>
+      <div class="auth-logo-badge">WP</div>
       <div>
-        <p class="auth-product mb-0">ScorPred Workforce</p>
+        <p class="auth-product mb-0">Workforce Platform</p>
         <p class="auth-mini mb-0">Authorized access only</p>
       </div>
     </div>
@@ -20,22 +20,7 @@
       <li><i class="bi bi-check2-circle"></i> Secure access with monitored authentication events</li>
     </ul>
 
-    <div class="auth-visual-grid">
-      <div class="auth-visual-card">
-        <span>Utilization</span>
-        <strong>94.2%</strong>
-      </div>
-      <div class="auth-visual-card">
-        <span>Approvals</span>
-        <strong>18 Pending</strong>
-      </div>
-      <div class="auth-visual-card">
-        <span>Coverage</span>
-        <strong>8 Teams</strong>
-      </div>
-    </div>
-
-    <p class="auth-support-text">Need credential support? <a href="mailto:support@workforce.local">Contact platform support</a></p>
+    <p class="auth-support-text">For account access or password resets, contact your organization's administrator.</p>
   </section>
 
   <section class="auth-card-premium" aria-live="polite">
@@ -54,7 +39,7 @@
         <div class="auth-error-box" role="alert"><i class="bi bi-exclamation-octagon"></i>{{ login_error }}</div>
       {% endif %}
 
-      <form method="post" id="loginForm" action="{{ url_for('auth.login') }}" novalidate>
+      <form method="post" id="loginForm" action="{{ url_for('auth.login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="next" value="{{ next_url }}" />
         <div class="mb-3">
           <label class="form-label" for="signin_username">Email or Username</label>
@@ -78,7 +63,7 @@
             <input class="form-check-input" type="checkbox" value="on" id="remember_me" name="remember_me" />
             <label class="form-check-label" for="remember_me">Remember me</label>
           </div>
-          <a class="auth-link" href="mailto:support@workforce.local">Forgot password?</a>
+          <span class="small text-muted">Need help? Contact your administrator.</span>
         </div>
 
         <p class="helper-copy mb-3">Authentication events are logged for security and audit traceability.</p>
@@ -93,7 +78,7 @@
         <p class="text-muted mb-0">Set up your workspace profile to start logging time and managing requests.</p>
       </div>
 
-      <form method="post" id="signupForm" action="{{ url_for('auth.signup') }}" novalidate>
+      <form method="post" id="signupForm" action="{{ url_for('auth.signup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="mb-3">
           <label class="form-label" for="signup_full_name">Full Name</label>
           <input id="signup_full_name" name="full_name" type="text" class="form-control auth-input {% if signup_errors.get('full_name') %}is-invalid{% endif %}" value="{{ signup_values.get('full_name', '') }}" placeholder="Ava Thompson" required />
@@ -115,7 +100,7 @@
         <div class="mb-3">
           <label class="form-label" for="signup_password">Password</label>
           <div class="auth-password-wrap">
-            <input id="signup_password" name="password" type="password" class="form-control auth-input {% if signup_errors.get('password') %}is-invalid{% endif %}" minlength="8" required />
+            <input id="signup_password" name="password" type="password" class="form-control auth-input {% if signup_errors.get('password') %}is-invalid{% endif %}" minlength="12" maxlength="128" autocomplete="new-password" required />
             <button type="button" class="auth-pass-toggle" data-target="signup_password" aria-label="Toggle password visibility"><i class="bi bi-eye"></i></button>
           </div>
           {% if signup_errors.get('password') %}<div class="invalid-feedback d-block">{{ signup_errors.get('password') }}</div>{% endif %}
@@ -124,7 +109,7 @@
         <div class="mb-3">
           <label class="form-label" for="signup_confirm_password">Confirm Password</label>
           <div class="auth-password-wrap">
-            <input id="signup_confirm_password" name="confirm_password" type="password" class="form-control auth-input {% if signup_errors.get('confirm_password') %}is-invalid{% endif %}" minlength="8" required />
+            <input id="signup_confirm_password" name="confirm_password" type="password" class="form-control auth-input {% if signup_errors.get('confirm_password') %}is-invalid{% endif %}" minlength="12" maxlength="128" autocomplete="new-password" required />
             <button type="button" class="auth-pass-toggle" data-target="signup_confirm_password" aria-label="Toggle password visibility"><i class="bi bi-eye"></i></button>
           </div>
           {% if signup_errors.get('confirm_password') %}<div class="invalid-feedback d-block">{{ signup_errors.get('confirm_password') }}</div>{% endif %}

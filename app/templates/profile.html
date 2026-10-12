@@ -33,13 +33,13 @@
     <div class="surface-card">
       <div class="card-head"><h3 class="h6 section-title mb-0">Edit Personal Details</h3><span class="muted-meta">Changes are saved to your employee record</span></div>
       {% if employee %}
-        <form method="post" class="row g-3 form-shell">
+        <form method="post" class="row g-3 form-shell"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <div class="col-md-6"><label class="form-label">First Name</label><input class="form-control" name="first_name" value="{{ employee.first_name }}" required /></div>
           <div class="col-md-6"><label class="form-label">Last Name</label><input class="form-control" name="last_name" value="{{ employee.last_name }}" required /></div>
           <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="{{ employee.email }}" required /></div>
           <div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" name="phone" value="{{ employee.phone }}" /></div>
           <div class="col-12"><label class="form-label">Address</label><input class="form-control" name="address" value="{{ employee.address }}" /></div>
-          <div class="col-12"><label class="form-label">Work Schedule</label><input class="form-control" name="schedule" value="{{ employee.schedule }}" /></div>
+          <div class="col-12"><label class="form-label">Work Schedule</label><input class="form-control" value="{{ employee.schedule }}" readonly /></div>
           <div class="col-12 d-flex flex-wrap gap-2 mt-1">
             <button class="btn btn-primary" type="submit">Save Profile Changes</button>
             <button class="btn btn-ghost" type="reset">Reset</button>
@@ -52,8 +52,4 @@
   </div>
 </div>
 
-<div class="surface-card">
-  <h3 class="h6">Profile Assets and Documents</h3>
-  <p class="small text-muted mb-0">Profile document uploads and photo workflows can be connected here for onboarding and compliance operations.</p>
-</div>
 {% endblock %}

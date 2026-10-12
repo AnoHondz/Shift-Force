@@ -10,7 +10,7 @@
   <div class="col-lg-8">
     <div class="surface-card">
       <p class="section-note mb-3">Provide complete dates and concise context so approvers can process requests quickly.</p>
-      <form method="post" class="row g-2">
+      <form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="col-md-6">
           <label class="form-label">Leave Type</label>
           <select name="request_type" class="form-select" required>
@@ -19,6 +19,7 @@
             <option>Sick Leave</option>
             <option>Personal Leave</option>
             <option>Remote Work</option>
+            <option>Other</option>
           </select>
         </div>
         <div class="col-md-3"><label class="form-label">Start Date</label><input name="start_date" type="date" class="form-control" required /></div>

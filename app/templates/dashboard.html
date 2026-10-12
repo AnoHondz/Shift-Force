@@ -3,9 +3,9 @@
 {% block title %}{{ page_title }}{% endblock %}
 {% block content %}
 {% if current_user.has_admin_access() %}
-  {% call ui.page_header('Good morning, ' ~ current_user.username, role_label(current_user.role) ~ ' · ' ~ today.strftime('%A, %b %d, %Y')) %}
+  {% call ui.page_header('Welcome, ' ~ current_user.username, role_label(current_user.role) ~ ' · ' ~ today.strftime('%A, %b %d, %Y')) %}
     <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-primary" href="{{ url_for('employees.add_employee') }}">Add Employee</a>
+      {% if current_user.role in Role.PEOPLE_EDIT %}<a class="btn btn-primary" href="{{ url_for('employees.add_employee') }}">Add Employee</a>{% endif %}
       <a class="btn btn-ghost" href="{{ url_for('leave.index') }}">Approve Request</a>
       <a class="btn btn-ghost" href="{{ url_for('reports.export_csv', period='weekly') }}">Export Report</a>
       <a class="btn btn-ghost" href="{{ url_for('employees.payroll') }}">Review Timesheets</a>
@@ -16,7 +16,7 @@
 
   <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Total Headcount</div><p class="kpi-value">{{ stats.employee_count }}</p><div class="kpi-meta">Active workforce</div></div></div>
-    <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Payroll This Week</div><p class="kpi-value">{{ stats.payroll_total_week|currency }}</p><div class="kpi-meta">Updated from latest entries</div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Payroll This Week</div><p class="kpi-value">{{ stats.payroll_total_week|currency }}</p><div class="kpi-meta">Week to date · submitted estimates</div></div></div>
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Overtime Rate</div><p class="kpi-value">{{ stats.overtime_rate }}%</p><div class="kpi-meta">Based on logged regular hours</div></div></div>
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Pending Approvals</div><p class="kpi-value">{{ stats.pending_approvals }}</p><div class="kpi-meta">Hours and leave workflows</div></div></div>
   </div>
@@ -24,7 +24,7 @@
   <div class="row g-3 mb-4">
     <div class="col-xl-7">
       <div class="surface-card">
-        <div class="card-head"><h3 class="h6 mb-0">Payroll Trend</h3><span class="muted-meta">Last 8 periods</span></div>
+        <div class="card-head"><h3 class="h6 mb-0">Payroll Trend</h3><span class="muted-meta">Last 8 work dates</span></div>
         <canvas id="payrollTrendChart" height="120"></canvas>
       </div>
     </div>
@@ -112,7 +112,7 @@
     </div>
   </div>
 {% else %}
-  {% call ui.page_header('Good morning, ' ~ (my_profile.first_name if my_profile else current_user.username), 'Personal workspace for schedules, pay, and requests.') %}
+  {% call ui.page_header('Welcome, ' ~ (my_profile.first_name if my_profile else current_user.username), 'Personal workspace for schedules, pay, and requests.') %}
     <div class="d-flex flex-wrap gap-2">
       <a class="btn btn-primary" href="{{ url_for('employees.payroll') }}">Log Hours</a>
       <a class="btn btn-ghost" href="{{ url_for('employees.profile') }}">Update Profile</a>
@@ -121,7 +121,7 @@
     </div>
   {% endcall %}
 
-  <p class="section-note mb-3">Track your week at a glance: hours, pay estimates, and leave request updates.</p>
+  <p class="section-note mb-3">Track recent hours, pay estimates, and leave request updates.</p>
 
   <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Hours Logged</div><p class="kpi-value">{{ my_summary.hours|hours if my_summary else '0.00' }}</p></div></div>
