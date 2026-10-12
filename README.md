@@ -1,6 +1,6 @@
-# Workforce Platform
+# Shiftspace
 
-A full-stack workforce application built with Python and Flask. A simple Today screen brings together the shift clock, upcoming schedule, and shared coworker chat. Authorized staff use Manage workplace to correct punches, plan shifts, and manage employee records.
+A full-stack workforce application built with Python and Flask. Today keeps the shift clock and upcoming schedule together. Team chat has a Discord-style layout with separate channels, coworker conversations, and picture sharing. Authorized staff use Manage workplace to correct punches, plan shifts, and manage employee records.
 
 Built by **Anotida Hondonga** as a software engineering portfolio project. The existing Flask/Jinja architecture is preserved and strengthened with explicit migrations, tested business rules, and safer administration.
 
@@ -15,7 +15,9 @@ Small teams often track employee details, hours, attendance, and leave in separa
 ## Features
 
 - Focused everyday navigation: Today, Schedule, and Team chat; staff tools under Manage workplace and personal tools under My account.
-- Persistent shared team chat with authenticated authors, CSRF-protected sending, escaped text, and automatic polling across signed-in coworker sessions.
+- Low-light charcoal theme and Shiftspace branding, with Today dedicated to the shift clock and schedule.
+- Persistent chat channels with authenticated authors, CSRF-protected sending, escaped text, earlier-message loading, and automatic polling across signed-in coworker sessions. Administrators and executives can create channels.
+- Protected picture sharing with previews, validated/normalized uploads, stripped metadata, bounded dimensions/file sizes, and storage covered by SQLite backups.
 - Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
@@ -48,7 +50,7 @@ flowchart LR
 
 ## Database design
 
-Ten domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, team messages, leave requests, notifications, and audit logs.
+Twelve domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, and audit logs.
 
 ```mermaid
 erDiagram
@@ -60,6 +62,8 @@ erDiagram
     EMPLOYEE ||--o{ LEAVE_REQUEST : requests
     USER ||--o{ NOTIFICATION : receives
     USER ||--o{ TEAM_MESSAGE : sends
+    TEAM_CHANNEL ||--o{ TEAM_MESSAGE : contains
+    TEAM_MESSAGE ||--o| CHAT_ATTACHMENT : shares
     USER o|--o{ AUDIT_LOG : performs
     USER o|--o{ PAYROLL_RECORD : reviews
     USER o|--o{ LEAVE_REQUEST : reviews
@@ -81,18 +85,21 @@ Registration always creates an employee role and cannot claim an existing employ
 | Review leave / attendance actions for others | — | Yes | Yes | — | Yes |
 | Correct punches / create, edit, cancel shifts | — | Yes | Yes | — | Yes |
 | Shared coworker chat | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile |
+| Create chat channels | — | — | — | — | Yes |
 
 Every inbox remains private, including administrator inboxes. Reviewers cannot approve their own payroll or leave. Management read access is organization-wide; department-level manager scoping is a future improvement.
 
 ## Everyday use and management
 
-After signing in, **Today** shows your own Clock in / Clock out button, upcoming dated shifts, and team chat. **Schedule** opens this week's shifts with previous/next week navigation. Employees see their own schedule; management roles can read the workplace schedule. No shifts are inferred from a profile's typical hours.
+After signing in, **Today** shows your own Clock in / Clock out button and upcoming dated shifts. **Schedule** opens this week's shifts with previous/next week navigation. Employees see their own schedule; management roles can read the workplace schedule. No shifts are inferred from a profile's typical hours.
 
 Open **Manage workplace → Punches** to select **Correct**, fix times, enter a reason, and save. **Add missed punches** creates a shift that was never clocked. Clock out may be left blank for someone still working. Corrected punches retain their record ID and an audit of old/new values; review any affected payroll entry separately.
 
 Open **Manage workplace → Schedule → Add a shift** to choose an employee, dates/times, and optional notes. Existing shifts have Edit and Cancel shift controls. Cancellation retains the stored shift and audit history. Times use `WORKFORCE_TIMEZONE`; ambiguous or nonexistent clock-change times are rejected.
 
-**Team chat** is one shared room for active coworkers in this installation. Messages persist in the database and update about every eight seconds while the page is visible. The current view shows recent messages; there are no attachments, direct messages, push alerts, presence indicators, or message deletion controls. Other tools, including payroll, reports, and audit history, are available from the management page.
+**Team chat** opens a channel list, conversation, and coworker list in a Discord-style layout. Administrators and executives use **Create channel** to add separate conversations. All channels are visible to active employee-linked accounts in this installation; channels are not private membership groups. Existing conversations remain in **#general**. Messages persist, update about every eight seconds while the page is visible, and support loading earlier messages. Enter sends; Shift+Enter adds a line break.
+
+Use **Add picture** to preview and send one JPG, PNG, WebP, or GIF per message, up to 5 MB and 12 million source pixels. Pictures are resized to at most 2,048 pixels on the longest edge, normalized to JPEG/PNG, and stripped of original metadata. GIF uploads become a still picture. Attachments require an active authenticated coworker account and remain in SQLite with their messages, so backups include pictures. Direct messages, private channels, presence, push alerts, moderation, and deletion controls are not implemented. Other tools, including payroll, reports, and audit history, are available from the management page.
 
 ## Install and run a fresh local demo
 
@@ -177,6 +184,7 @@ Captured from the running application with synthetic records on October 12, 2026
 | Employee workspace | [Screenshot](docs/screenshots/employee-workspace.png) |
 | Management and missed punches | [Manage workplace](docs/screenshots/manage-workplace.png) · [Punches](docs/screenshots/missed-punches.png) |
 | Dated schedule and coworker chat | [Schedule](docs/screenshots/schedule.png) · [Team chat](docs/screenshots/team-chat.png) |
+| General channel | [Screenshot](docs/screenshots/chat-general.png) |
 | Directory and employee profile | [Directory](docs/screenshots/employees.png) · [Profile](docs/screenshots/employee-profile.png) |
 | Payroll | [Screenshot](docs/screenshots/payroll.png) |
 | Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |
@@ -196,7 +204,7 @@ Known limitations: payroll estimates exclude taxes, deductions, benefits, holida
 
 ## Portfolio description and verified résumé bullets
 
-**Workforce Platform:** a Flask/SQLAlchemy application connecting employee management, timesheet review, attendance, leave approval, reporting, and audit workflows, with a responsive Jinja/Bootstrap interface and automated security/business-rule verification.
+**Shiftspace:** a Flask/SQLAlchemy application connecting shift clocks, schedules, channel-based coworker chat, employee management, payroll, and approval workflows, with a responsive dark interface and automated security/business-rule verification.
 
 - Strengthened a Flask employee operations platform with role and ownership checks, CSRF protection, login throttling, private notifications, and explicit administrator provisioning.
 - Implemented workweek-aware decimal payroll calculations, rate snapshots, correction-driven approval resets, and record-preserving SQLite migrations with integrity checks.

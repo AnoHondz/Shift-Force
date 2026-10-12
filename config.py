@@ -25,7 +25,7 @@ class Config:
     REMEMBER_COOKIE_SECURE = APP_ENV == "production"
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
     REMEMBER_COOKIE_DURATION = timedelta(days=7)
-    MAX_CONTENT_LENGTH = 1024 * 1024
+    MAX_CONTENT_LENGTH = 6 * 1024 * 1024
     PUBLIC_REGISTRATION = APP_ENV != "production"
     WORKFORCE_TIMEZONE = os.getenv("WORKFORCE_TIMEZONE", "UTC")
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")

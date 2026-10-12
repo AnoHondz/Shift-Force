@@ -379,17 +379,48 @@ class ScheduledShift(db.Model):
     )
 
 
+class TeamChannel(db.Model):
+    __tablename__ = "team_channels"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(40), nullable=False, unique=True)
+    topic = db.Column(db.String(160), nullable=False, default="")
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
 class TeamMessage(db.Model):
     __tablename__ = "team_messages"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    channel_id = db.Column(
+        db.Integer, db.ForeignKey("team_channels.id"), nullable=False, default=1, server_default="1"
+    )
     body = db.Column(db.String(2000), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     user = db.relationship("User", lazy="joined")
-    __table_args__ = (
-        db.CheckConstraint("length(body) BETWEEN 1 AND 2000", name="ck_message_length"),
+    channel = db.relationship("TeamChannel", lazy="joined")
+    attachment = db.relationship(
+        "ChatAttachment", uselist=False, back_populates="message", lazy="joined"
     )
+    __table_args__ = (
+        db.CheckConstraint("length(body) BETWEEN 0 AND 2000", name="ck_message_length"),
+        db.Index("ix_message_channel_id", "channel_id", "id"),
+    )
+
+
+class ChatAttachment(db.Model):
+    __tablename__ = "chat_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(
+        db.Integer, db.ForeignKey("team_messages.id"), nullable=False, unique=True
+    )
+    filename = db.Column(db.String(160), nullable=False)
+    mime_type = db.Column(db.String(40), nullable=False)
+    data = db.deferred(db.Column(db.LargeBinary, nullable=False))
+    message = db.relationship("TeamMessage", back_populates="attachment")
 
 
 class Notification(db.Model):
@@ -433,6 +464,7 @@ class AuditLog(db.Model):
         "schedule_created",
         "schedule_updated",
         "schedule_cancelled",
+        "chat_channel_created",
         "employee_created",
         "employee_updated",
         "employee_deleted",

@@ -1,12 +1,12 @@
 # Verification record
 
-Final local verification was completed on October 12, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0003_workplace` with writers stopped. Its existing records and account passwords were preserved. The original `employee_mgmt.db` remained unchanged.
+Final local verification was completed on October 12, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0004_channels` with writers stopped. Its existing records and account passwords were preserved. The original `employee_mgmt.db` remained unchanged.
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **140 passed, 0 failed**, 47.51 seconds after the workplace, schedule, and chat addition |
+| `python -m pytest -q` | **156 passed, 0 failed**, 52.60 seconds after the Shiftspace channels and picture-sharing update |
 | Ruff lint | All checks passed |
-| Ruff formatting | 41 Python files formatted |
+| Ruff formatting | 44 Python files formatted |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | 27 resolved runtime packages, 0 known vulnerabilities at the time of the audit |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -14,7 +14,7 @@ Final local verification was completed on October 12, 2026, on Windows with Pyth
 | Historical exposure review | Five original commits contain sensitive environment/database artifacts; history is unchanged |
 | Documented fresh setup | Environment generation, migrations, demo seeding, localhost startup, and HTTP 200 login page passed in a clean temporary directory |
 | Disposable original-database migration | All original values and rows in eight tables preserved; foreign-key check passed; original file hash unchanged |
-| Chromium browser verification | Twelve workflow checks passed, 0 browser errors; 21 real screenshots captured |
+| Chromium browser verification | Thirteen workflow checks passed, 0 browser errors; 22 real screenshots captured |
 | Existing synthetic demo upgrade | Verified backup, successful copy-first migration, all preexisting column values/rows retained, integrity checks passed, and same accounts verified after restart |
 
 The browser script exercised employee login with CSRF, dashboard clock-in/out for both employee and administrator accounts, persisted shift status after reload, attendance history, leave submission, POST logout, administrator login, employee creation/search/edit/profile, cross-day overtime and payroll approval, leave approval, inbox/audit pages, and CSV/PDF downloads. New workflows enter Manage workplace, add a missed shift, correct it with an audit reason, publish a dated schedule, verify employee visibility, and exchange chat replies across separate signed-in browser sessions with automatic polling. Mobile home, directory, payroll, schedule, chat, and management were checked for page overflow. Screenshots use synthetic records only.
@@ -24,6 +24,10 @@ Nine shift-clock regressions verify all six account roles can clock their own sh
 The automated tests additionally cover role and ownership restrictions, employee archival and retained history, login throttling, hostile redirect variants, invalid numerical input, partial workweeks, compensation snapshots, correction-driven approval resets, voiding, formula-safe CSV, UTC offsets, leave overlap triggers, duplicate active shifts, foreign keys, optimistic concurrency, trusted administration commands, fresh/legacy migrations, invalid-data migration refusal, and destructive downgrade refusal.
 
 Twenty-eight workplace regressions cover all-role correction/schedule permissions, retained punch identity, before/after audits, stale-form rejection, missed clock-outs, invalid/future/overlapping punches, overnight scheduling, cancellation and ownership, daylight-saving input handling, database overlap triggers, shared chat authorship/escaping/polling, malformed messages, authentication, active-profile requirements, and CSRF. A further migration regression verifies the upgrade from `0002_integrity` preserves existing punches and initializes the new tools empty.
+
+Fifteen channel/picture regressions verify administrator/executive channel creation, name validation and duplicate/CSRF handling, independent conversations and history cursors, picture-only messages, authenticated image access, normalization and metadata removal, safe filenames, invalid or oversized picture rejection without a partial message, transparency/resizing, HTTP upload limits, and Today containing only the clock/schedule cards. A migration regression verifies existing messages retain their IDs, authors, text, and timestamps in #general after `0004_channels`.
+
+The browser also creates #shift-swaps through the admin UI, switches another account into it, previews and shares a picture, verifies the coworker receives and decodes it through polling, reloads to confirm persistence, and verifies the new conversation is absent from #general. Desktop chat fits the viewport; mobile checks cover the channel layout. Real screenshots show the charcoal theme, Shiftspace branding, and simplified Today screen.
 
 ## Scope and limits
 

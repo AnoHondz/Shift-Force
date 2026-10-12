@@ -4,7 +4,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Employee, PayrollRecord, Role, User
+from app.models import Employee, PayrollRecord, Role, TeamChannel, User
 
 TEST_PASSWORD = secrets.token_urlsafe(18)
 
@@ -26,6 +26,8 @@ def app():
     with app.app_context():
         db.drop_all()
         db.create_all()
+        db.session.add(TeamChannel(id=1, name="general", topic="Everyone at work"))
+        db.session.commit()
     yield app
     with app.app_context():
         db.session.remove()

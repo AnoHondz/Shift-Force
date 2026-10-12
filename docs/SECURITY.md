@@ -40,3 +40,8 @@ The CSP permits inline scripts/styles used by the existing templates; extracting
 Validate HTTPS, a production WSGI server, shared Redis rate limiting, proxy trust, private database storage, backups/restore procedures, logging retention, and employee-data access policies before deployment. Current tests and scans are evidence of checked behavior, not a guarantee against every vulnerability.
 
 Run `python -m scripts.security_check --history`, `python -m bandit -r app config.py run.py`, and `python -m pip_audit -r requirements.txt`. The tracked-file checker reports paths and suspicious assignment locations without printing secret values. Python dependency auditing does not audit vendored JavaScript libraries.
+# Chat channels and pictures
+
+Channels are visible to all active employee-linked accounts in this installation; separate channels are not private membership groups. Only administrators and executives can create channels. Text sending and image uploads require authentication, an active employee profile, CSRF, and the per-user message rate limit. Image URLs also require an active coworker account and return no-store/nosniff headers.
+
+Pictures are validated using Pillow and re-encoded as JPEG/PNG, with original metadata removed. Upload size, pixel count, output dimensions, and request size are bounded; arbitrary files and SVG are rejected. Picture data stays in SQLite and is included in database backups. Protect those backups as employee communication data. Chat has no moderation or retention controls; apply an appropriate workplace policy before production adoption.

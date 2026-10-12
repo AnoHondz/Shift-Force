@@ -1,6 +1,8 @@
 """Everyday workspace and manager tools, with shared persistent coworker chat."""
 
+import re
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from flask import (
@@ -12,17 +14,21 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from flask_login import current_user, login_required
 from sqlalchemy import or_
 
+from ..chat_images import normalize_picture
 from ..extensions import db, limiter
 from ..models import (
     Attendance,
+    ChatAttachment,
     Employee,
     Role,
     ScheduledShift,
+    TeamChannel,
     TeamMessage,
     create_audit_log,
     utcnow,
@@ -103,8 +109,11 @@ def validate_interval(start, end):
         raise ValueError("End time must follow start time and the shift must be at most 24 hours.")
 
 
-def latest_messages():
-    return list(reversed(TeamMessage.query.order_by(TeamMessage.id.desc()).limit(25).all()))
+def latest_messages(channel_id=1, before=None):
+    query = TeamMessage.query.filter_by(channel_id=channel_id)
+    if before:
+        query = query.filter(TeamMessage.id < before)
+    return list(reversed(query.order_by(TeamMessage.id.desc()).limit(25).all()))
 
 
 def render_today():
@@ -131,7 +140,6 @@ def render_today():
             employee_id=current_user.employee_id, clock_out_at=None
         ).first(),
         upcoming=upcoming,
-        messages=latest_messages() if employee and not employee.archived else [],
     )
 
 
@@ -347,22 +355,83 @@ def punches():
     )
 
 
-@workplace_bp.get("/chat")
-@login_required
-def chat():
-    require_coworker()
-    return render_template(
-        "chat.html", active_page="chat", page_title="Team chat", messages=latest_messages()
+def selected_channel():
+    value = (
+        request.args.get("channel_id", "1")
+        if request.method == "GET"
+        else request.form.get("channel_id", "1")
     )
+    if request.is_json:
+        payload = request.get_json(silent=True)
+        if isinstance(payload, dict):
+            value = str(payload.get("channel_id", "1"))
+    if not value.isascii() or not value.isdigit() or len(value) > 18 or int(value) < 1:
+        abort(400, description="Choose a chat channel.")
+    return db.get_or_404(TeamChannel, int(value))
+
+
+@workplace_bp.get("/chat")
+@workplace_bp.get("/chat/<int:channel_id>")
+@login_required
+def chat(channel_id=1):
+    require_coworker()
+    channel = db.get_or_404(TeamChannel, channel_id)
+    return render_template(
+        "chat.html",
+        active_page="chat",
+        page_title="Team chat",
+        channel=channel,
+        channels=TeamChannel.query.order_by(TeamChannel.id).all(),
+        messages=latest_messages(channel.id),
+        coworkers=employees(),
+    )
+
+
+@workplace_bp.post("/chat/channels")
+@login_required
+@limiter.limit("10 per minute", key_func=lambda: str(current_user.id))
+def create_channel():
+    require_coworker()
+    if current_user.role not in {Role.ADMIN, Role.EXECUTIVE}:
+        abort(403)
+    name = request.form.get("name", "").strip().lower().replace(" ", "-")
+    topic = request.form.get("topic", "").strip()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", name):
+        abort(400, description="Use 1 to 40 letters, numbers, or hyphens for the channel name.")
+    if len(topic) > 160:
+        abort(400, description="Keep the channel description under 160 characters.")
+    if TeamChannel.query.filter_by(name=name).first():
+        abort(409, description="A channel with that name already exists.")
+    channel = TeamChannel(name=name, topic=topic, created_by_id=current_user.id)
+    db.session.add(channel)
+    db.session.flush()
+    create_audit_log(
+        current_user,
+        "chat_channel_created",
+        "TeamChannel",
+        str(channel.id),
+        f"Created #{name}. {topic}",
+    )
+    db.session.commit()
+    flash("Channel created. Your coworkers can join the conversation.", "success")
+    return redirect(url_for("workplace.chat", channel_id=channel.id))
 
 
 def message_data(message):
     employee = message.user.employee
+    attachment = message.attachment
     return dict(
         id=message.id,
+        channel_id=message.channel_id,
         author=employee.full_name() if employee else message.user.username,
         body=message.body,
         created_at=message.created_at.replace(tzinfo=timezone.utc).isoformat(),
+        attachment=dict(
+            url=url_for("workplace.picture", attachment_id=attachment.id),
+            filename=attachment.filename,
+        )
+        if attachment
+        else None,
     )
 
 
@@ -370,16 +439,30 @@ def message_data(message):
 @login_required
 def messages():
     require_coworker()
+    channel = selected_channel()
     after = request.args.get("after", "0")
-    if not after.isdigit() or len(after) > 18:
-        abort(400, description="Invalid message cursor.")
-    cursor = int(after)
+    before = request.args.get("before", "0")
+    for value in (after, before):
+        if not value.isascii() or not value.isdigit() or len(value) > 18:
+            abort(400, description="Invalid message cursor.")
+    cursor, older = int(after), int(before)
+    if cursor and older:
+        abort(400, description="Choose one message cursor.")
     rows = (
-        TeamMessage.query.filter(TeamMessage.id > cursor).order_by(TeamMessage.id).limit(100).all()
+        TeamMessage.query.filter(TeamMessage.channel_id == channel.id, TeamMessage.id > cursor)
+        .order_by(TeamMessage.id)
+        .limit(100)
+        .all()
         if cursor
-        else latest_messages()
+        else latest_messages(channel.id, older)
     )
-    return jsonify(messages=[message_data(row) for row in rows])
+    has_older = bool(
+        rows
+        and TeamMessage.query.filter(
+            TeamMessage.channel_id == channel.id, TeamMessage.id < rows[0].id
+        ).first()
+    )
+    return jsonify(messages=[message_data(row) for row in rows], has_older=has_older)
 
 
 @workplace_bp.post("/api/chat/messages")
@@ -387,11 +470,38 @@ def messages():
 @limiter.limit("30 per minute", key_func=lambda: str(current_user.id))
 def send_message():
     require_coworker()
-    payload = request.get_json(silent=True)
-    body = payload.get("body") if isinstance(payload, dict) else None
-    if not isinstance(body, str) or not 1 <= len(body.strip()) <= 2000:
-        abort(400, description="Write a message between 1 and 2,000 characters.")
-    message = TeamMessage(user_id=current_user.id, body=body.strip())
+    channel = selected_channel()
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    body = payload.get("body") if hasattr(payload, "get") else None
+    upload = request.files.get("picture")
+    if not isinstance(body, str) or len(body.strip()) > 2000 or (not body.strip() and not upload):
+        abort(
+            400,
+            description="Write a message or attach a picture. Messages can be up to 2,000 characters.",
+        )
+    picture_data = None
+    if upload:
+        try:
+            picture_data = normalize_picture(upload)
+        except ValueError as exc:
+            abort(400, description=str(exc))
+    message = TeamMessage(user_id=current_user.id, channel_id=channel.id, body=body.strip())
     db.session.add(message)
+    if picture_data:
+        message.attachment = ChatAttachment(**picture_data)
     db.session.commit()
     return jsonify(message=message_data(message)), 201
+
+
+@workplace_bp.get("/chat/pictures/<int:attachment_id>")
+@login_required
+def picture(attachment_id):
+    require_coworker()
+    attachment = db.get_or_404(ChatAttachment, attachment_id)
+    return send_file(
+        BytesIO(attachment.data),
+        mimetype=attachment.mime_type,
+        download_name=attachment.filename,
+        max_age=0,
+        conditional=False,
+    )

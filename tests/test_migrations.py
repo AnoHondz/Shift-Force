@@ -36,7 +36,7 @@ def test_fresh_migration_and_second_upgrade_are_idempotent(tmp_path):
         upgrade()
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0003_workplace"
+            == "0004_channels"
         )
 
 
@@ -117,6 +117,44 @@ def test_invalid_legacy_data_stops_migration_without_removing_records(tmp_path):
         )
 
 
+def test_channels_upgrade_keeps_existing_conversation_in_general(tmp_path):
+    app = migration_app(tmp_path)
+    with app.app_context():
+        upgrade(revision="0003_workplace")
+        db.session.execute(
+            text(
+                "INSERT INTO employees (id,first_name,last_name,email,job_title,schedule,hourly_rate,overtime_multiplier,date_hired,archived) VALUES (1,'Existing','Coworker','chat@example.com','Engineer','Weekdays',30,1.5,'2026-10-01',0)"
+            )
+        )
+        db.session.execute(
+            text(
+                "INSERT INTO users (id,username,password_hash,role,employee_id) VALUES (1,'coworker',:hash,'employee',1)"
+            ),
+            {"hash": secrets.token_hex(32)},
+        )
+        db.session.execute(
+            text(
+                "INSERT INTO team_messages (id,user_id,body,created_at) VALUES (1,1,'Keep this conversation','2026-10-12 13:00:00')"
+            )
+        )
+        before = tuple(
+            db.session.execute(text("SELECT id,user_id,body,created_at FROM team_messages")).one()
+        )
+        db.session.commit()
+        upgrade()
+        after = tuple(
+            db.session.execute(text("SELECT id,user_id,body,created_at FROM team_messages")).one()
+        )
+        assert after == before
+        assert db.session.execute(text("SELECT channel_id FROM team_messages")).scalar() == 1
+        assert (
+            db.session.execute(text("SELECT name FROM team_channels WHERE id=1")).scalar()
+            == "general"
+        )
+        assert db.session.execute(text("SELECT COUNT(*) FROM chat_attachments")).scalar() == 0
+        assert db.session.execute(text("PRAGMA foreign_key_check")).all() == []
+
+
 def test_migration_downgrade_refuses_destructive_changes(tmp_path):
     from flask_migrate import downgrade
 
@@ -127,5 +165,5 @@ def test_migration_downgrade_refuses_destructive_changes(tmp_path):
             downgrade(revision="0001_baseline")
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0003_workplace"
+            == "0004_channels"
         )

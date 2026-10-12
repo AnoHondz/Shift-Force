@@ -6,16 +6,18 @@ import secrets
 import tempfile
 import threading
 from datetime import date, datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from flask_migrate import upgrade
+from PIL import Image, ImageDraw, ImageFont
 from playwright.sync_api import expect, sync_playwright
 from werkzeug.serving import make_server
 
 from app import create_app
 from app.extensions import db
-from app.models import Attendance, Employee, PayrollRecord, User, utcnow
+from app.models import Attendance, Employee, PayrollRecord, TeamChannel, User, utcnow
 
 
 def main():
@@ -54,6 +56,7 @@ def main():
 
         def capture(page, name):
             if options.screenshots:
+                page.evaluate("window.scrollTo(0, 0)")
                 page.screenshot(path=str(screenshots / f"{name}.png"), full_page=True)
 
         try:
@@ -187,6 +190,8 @@ def main():
                 )
                 coworker.get_by_role("button", name="Sign In", exact=True).click()
                 expect(coworker.get_by_text("Front desk coverage", exact=True)).to_be_visible()
+                capture(coworker, "employee-workspace")
+                coworker.goto(origin + "/chat")
                 coworker.get_by_label("Message your team").fill("Can someone cover the front desk?")
                 coworker.get_by_role("button", name="Send", exact=True).click()
                 expect(
@@ -201,8 +206,52 @@ def main():
                 expect(
                     coworker.get_by_text("I can help. See you tomorrow!", exact=True)
                 ).to_be_visible(timeout=12000)
+                capture(page, "chat-general")
+                page.locator(".create-channel summary").click()
+                page.get_by_label("Channel name", exact=True).fill("shift-swaps")
+                page.get_by_label("Description (optional)", exact=True).fill(
+                    "Find cover and share shift notes"
+                )
+                page.get_by_role("button", name="Create channel", exact=True).click()
+                with app.app_context():
+                    channel_id = TeamChannel.query.filter_by(name="shift-swaps").one().id
+                expect(page).to_have_url(origin + f"/chat/{channel_id}")
+                coworker.reload()
+                coworker.get_by_role("navigation", name="Channels", exact=True).get_by_role(
+                    "link", name="shift-swaps", exact=True
+                ).click()
+                expect(coworker).to_have_url(origin + f"/chat/{channel_id}")
+                photo = Image.new("RGB", (480, 240), "#292a35")
+                drawing = ImageDraw.Draw(photo)
+                drawing.rectangle((18, 18, 462, 222), fill="#3d3a50")
+                font = ImageFont.load_default(size=23)
+                drawing.text((40, 42), "Tomorrow's handoff", fill="#e8e0ff", font=font)
+                drawing.text((40, 102), "Front desk: Taylor", fill="#c3badb", font=font)
+                drawing.text((40, 146), "9 AM - 5 PM", fill="#c3badb", font=font)
+                buffer = BytesIO()
+                photo.save(buffer, format="PNG")
+                page.locator("#chat-picture").set_input_files(
+                    {"name": "handoff.png", "mimeType": "image/png", "buffer": buffer.getvalue()}
+                )
+                expect(page.get_by_alt_text("Picture ready to share")).to_be_visible()
+                page.get_by_label("Message your team").fill("Coverage notes for tomorrow")
+                page.get_by_role("button", name="Send", exact=True).click()
+                expect(page.locator(".chat-picture")).to_be_visible()
+                expect(coworker.locator(".chat-picture")).to_be_visible(timeout=12000)
+                assert coworker.locator(".chat-picture").evaluate("image => image.naturalWidth > 0")
+                page.reload()
+                expect(page.locator(".chat-picture")).to_be_visible()
+                assert page.evaluate("document.documentElement.scrollHeight <= window.innerHeight")
                 capture(page, "team-chat")
-                capture(coworker, "employee-workspace")
+                coworker.goto(origin + "/chat")
+                expect(
+                    coworker.get_by_text("Coverage notes for tomorrow", exact=True)
+                ).to_have_count(0)
+                capture(coworker, "chat-general")
+                coworker.goto(origin + f"/chat/{channel_id}")
+                completed.append(
+                    "Admin channel creation, isolated conversations, preview and protected picture sharing"
+                )
                 page.goto(origin + "/dashboard")
                 capture(page, "dashboard")
                 coworker_context.close()
@@ -286,7 +335,7 @@ def main():
                     ("/employees", "employees-mobile"),
                     ("/payroll", "payroll-mobile"),
                     ("/schedule", "schedule-mobile"),
-                    ("/chat", "team-chat-mobile"),
+                    (f"/chat/{channel_id}", "team-chat-mobile"),
                     ("/manage", "manage-workplace-mobile"),
                 ]:
                     page.goto(origin + path)
