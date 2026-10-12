@@ -5,7 +5,6 @@ from ..extensions import db
 from ..models import LeaveRequest, Notification, PayrollRecord
 from ..utils import parse_positive_int
 
-
 notifications_bp = Blueprint("notifications", __name__, url_prefix="/notifications")
 
 
@@ -15,7 +14,9 @@ def index():
     view = request.args.get("view", "all")
     page = parse_positive_int(request.args.get("page"), default=1)
     per_page = parse_positive_int(request.args.get("per_page"), default=20, maximum=100)
-    query = Notification.query.order_by(Notification.created_at.desc())
+    query = Notification.query.filter_by(user_id=current_user.id).order_by(
+        Notification.created_at.desc()
+    )
     if current_user.has_admin_access():
         if view not in {"all", "pending", "alerts"}:
             view = "all"
@@ -32,8 +33,16 @@ def index():
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     notifications = pagination.items
-    pending_leave = LeaveRequest.query.filter_by(status="Pending").count() if current_user.has_admin_access() else 0
-    pending_hours = PayrollRecord.query.filter_by(status="Pending").count() if current_user.has_admin_access() else 0
+    pending_leave = (
+        LeaveRequest.query.filter_by(status="Pending").count()
+        if current_user.has_admin_access()
+        else 0
+    )
+    pending_hours = (
+        PayrollRecord.query.filter_by(status="Pending").count()
+        if current_user.has_admin_access()
+        else 0
+    )
 
     return render_template(
         "notifications.html",
@@ -51,8 +60,8 @@ def index():
 @notifications_bp.route("/<int:notification_id>/read", methods=("POST",))
 @login_required
 def mark_read(notification_id):
-    notification = Notification.query.get_or_404(notification_id)
-    if notification.user_id != current_user.id and not current_user.has_admin_access():
+    notification = db.get_or_404(Notification, notification_id)
+    if notification.user_id != current_user.id:
         flash("You do not have permission to update that notification.", "error")
         return redirect(url_for("notifications.index"))
 
@@ -65,10 +74,7 @@ def mark_read(notification_id):
 @notifications_bp.route("/mark-all", methods=("POST",))
 @login_required
 def mark_all_read():
-    if current_user.has_admin_access():
-        Notification.query.filter_by(is_read=False).update({"is_read": True})
-    else:
-        Notification.query.filter_by(user_id=current_user.id, is_read=False).update({"is_read": True})
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update({"is_read": True})
     db.session.commit()
     flash("All notifications marked as read.", "success")
     return redirect(url_for("notifications.index"))

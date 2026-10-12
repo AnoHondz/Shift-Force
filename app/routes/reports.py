@@ -2,7 +2,7 @@ import csv
 from datetime import date, timedelta
 from io import BytesIO, StringIO
 
-from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, flash, render_template, request
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -10,7 +10,17 @@ from sqlalchemy import asc, desc, func
 
 from ..decorators import roles_required
 from ..models import Department, Employee, PayrollRecord, Role
+from ..payroll import PayPeriod, Workweek
 from ..utils import parse_date, parse_positive_int
+
+
+def csv_safe(value):
+    # Prevent spreadsheet applications interpreting untrusted text as formulas.
+    return (
+        "'" + value
+        if value.lstrip().startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n"))
+        else value
+    )
 
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
@@ -19,10 +29,12 @@ reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 def get_period_bounds(period: str):
     today = date.today()
     if period == "last30":
-        return today - timedelta(days=30), today
-    if period == "monthly":
-        return today.replace(day=1), today
-    return today - timedelta(days=today.weekday()), today
+        bounds = PayPeriod(today - timedelta(days=29), today)
+    elif period == "monthly":
+        bounds = PayPeriod(today.replace(day=1), today)
+    else:
+        bounds = PayPeriod(Workweek.containing(today).start, today)
+    return bounds.start, bounds.end
 
 
 def fetch_report_rows(period: str):
@@ -32,7 +44,11 @@ def fetch_report_rows(period: str):
     query = (
         PayrollRecord.query.join(Employee)
         .join(Department, isouter=True)
-        .filter(PayrollRecord.work_date.between(start_date, end_date))
+        .filter(
+            PayrollRecord.work_date.between(start_date, end_date),
+            PayrollRecord.status.notin_(["Rejected", "Voided"]),
+        )
+        .filter(PayrollRecord.status.notin_(["Rejected", "Voided"]))
     )
     return query, start_date, end_date
 
@@ -54,7 +70,10 @@ def index():
         rows_query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(requested_start, requested_end))
+            .filter(
+                PayrollRecord.work_date.between(requested_start, requested_end),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
         )
         start_date, end_date = requested_start, requested_end
     else:
@@ -71,7 +90,9 @@ def index():
     }
     sort_column = sort_map.get(sort, PayrollRecord.work_date)
     order_clause = desc(sort_column) if direction == "desc" else asc(sort_column)
-    pagination = rows_query.order_by(order_clause, Employee.last_name, Employee.first_name).paginate(
+    pagination = rows_query.order_by(
+        order_clause, Employee.last_name, Employee.first_name
+    ).paginate(
         page=page,
         per_page=per_page,
         error_out=False,
@@ -84,7 +105,10 @@ def index():
             func.sum(PayrollRecord.total_pay).label("total_pay"),
             func.sum(PayrollRecord.overtime_hours).label("overtime_hours"),
         )
-        .filter(PayrollRecord.work_date.between(start_date, end_date))
+        .filter(
+            PayrollRecord.work_date.between(start_date, end_date),
+            PayrollRecord.status.notin_(["Rejected", "Voided"]),
+        )
         .group_by(PayrollRecord.work_date)
         .order_by(PayrollRecord.work_date)
         .all()
@@ -110,7 +134,10 @@ def index():
             PayrollRecord.query.with_entities(Department.name, func.sum(PayrollRecord.total_pay))
             .join(Employee, Employee.id == PayrollRecord.employee_id)
             .join(Department, Department.id == Employee.department_id, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .group_by(Department.name)
             .order_by(func.sum(PayrollRecord.total_pay).desc())
             .all()
@@ -143,13 +170,17 @@ def index():
 @roles_required(*Role.ADMIN_LIKE)
 def export_csv():
     period = request.args.get("period", "weekly")
+    period = period if period in {"weekly", "monthly", "last30"} else "weekly"
     start_date = parse_date(request.args.get("start_date", ""))
     end_date = parse_date(request.args.get("end_date", ""))
     if start_date and end_date and start_date <= end_date:
         query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .order_by(Employee.last_name, Employee.first_name)
         )
     else:
@@ -163,8 +194,9 @@ def export_csv():
             "Employee",
             "Position",
             "Department",
-            "Week Start",
-            "Week End",
+            "Work Date",
+            "Period Start",
+            "Period End",
             "Hours Worked",
             "Regular Hours",
             "Overtime Hours",
@@ -174,9 +206,10 @@ def export_csv():
     for row in rows:
         writer.writerow(
             [
-                row.employee.full_name(),
-                row.employee.job_title,
-                row.employee.department.name if row.employee.department else "Unassigned",
+                csv_safe(row.employee.full_name()),
+                csv_safe(row.employee.job_title),
+                csv_safe(row.employee.department.name if row.employee.department else "Unassigned"),
+                row.work_date.isoformat(),
                 start_date.isoformat(),
                 end_date.isoformat(),
                 f"{row.hours_worked:.2f}",
@@ -197,20 +230,26 @@ def export_csv():
 @roles_required(*Role.ADMIN_LIKE)
 def export_pdf():
     period = request.args.get("period", "weekly")
+    period = period if period in {"weekly", "monthly", "last30"} else "weekly"
     start_date = parse_date(request.args.get("start_date", ""))
     end_date = parse_date(request.args.get("end_date", ""))
     if start_date and end_date and start_date <= end_date:
         query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .order_by(PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name)
         )
     else:
         query, start_date, end_date = fetch_report_rows(period)
-        query = query.order_by(PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name)
+        query = query.order_by(
+            PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name
+        )
 
-    rows = query.limit(500).all()
+    rows = query.all()
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter

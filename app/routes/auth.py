@@ -1,20 +1,33 @@
 from datetime import date
+from urllib.parse import unquote, urlsplit
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import current_user, login_user, logout_user
-from flask_login import login_required
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import or_
 
-from ..extensions import db, login_manager
+from ..extensions import db, limiter, login_manager
 from ..models import Employee, Role, User, create_audit_log
-
+from ..utils import valid_email, valid_password
 
 auth_bp = Blueprint("auth", __name__)
 
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    if not user_id.isdigit():
+        return None
+    user = db.session.get(User, int(user_id))
+    return user if user and user.is_active else None
 
 
 def get_dashboard_endpoint(user):
@@ -25,7 +38,16 @@ def get_dashboard_endpoint(user):
 
 def get_next_url(default_endpoint="employees.dashboard"):
     next_url = request.args.get("next") or request.form.get("next")
-    if next_url and next_url.startswith("/"):
+    parsed = urlsplit(unquote(next_url or ""))
+    if (
+        next_url
+        and next_url.startswith("/")
+        and not parsed.netloc
+        and not parsed.scheme
+        and not unquote(next_url).startswith("//")
+        and "\\" not in unquote(next_url)
+        and not any(ord(c) < 32 for c in unquote(next_url))
+    ):
         return next_url
     return url_for(default_endpoint)
 
@@ -53,7 +75,10 @@ def _split_full_name(full_name: str):
 
 
 @auth_bp.route("/signup", methods=("GET", "POST"))
+@limiter.limit("10 per hour", methods=["POST"])
 def signup():
+    if not current_app.config.get("PUBLIC_REGISTRATION", True):
+        abort(403, description="Registration is disabled. Contact your administrator.")
     if current_user.is_authenticated:
         return redirect(url_for(get_dashboard_endpoint(current_user)))
     if request.method == "POST":
@@ -71,22 +96,24 @@ def signup():
         signup_errors = {}
 
         first_name, last_name = _split_full_name(full_name)
-        if not first_name or not last_name:
+        if not first_name or not last_name or len(first_name) > 120 or len(last_name) > 120:
             signup_errors["full_name"] = "Enter your full name (first and last)."
-        if not username:
-            signup_errors["username"] = "Username is required."
+        if not 3 <= len(username) <= 120 or not all(c.isalnum() or c in "._-" for c in username):
+            signup_errors["username"] = "Use 3–120 letters, numbers, dots, dashes, or underscores."
         elif User.query.filter_by(username=username).first():
             signup_errors["username"] = "That username is already taken."
-        if not email:
-            signup_errors["email"] = "Email is required."
+        if not valid_email(email):
+            signup_errors["email"] = "Enter a valid email address."
         elif Employee.query.filter_by(email=email).first():
-            existing_employee = Employee.query.filter_by(email=email).first()
-            if existing_employee.user:
-                signup_errors["email"] = "That email is already associated with another account."
-        if len(password) < 8:
-            signup_errors["password"] = "Password must be at least 8 characters."
+            signup_errors["email"] = (
+                "That email is already associated with an employee record. Contact an administrator."
+            )
+        if not valid_password(password):
+            # B105 mistakes the validation message for a hardcoded password.
+            signup_errors["password"] = "Password must be 12–128 characters."  # nosec B105
         if password != confirm_password:
-            signup_errors["confirm_password"] = "Passwords do not match."
+            # B105 mistakes the validation message for a hardcoded password.
+            signup_errors["confirm_password"] = "Passwords do not match."  # nosec B105
 
         if not signup_errors:
             employee = Employee(
@@ -124,6 +151,7 @@ def signup():
 
 
 @auth_bp.route("/login", methods=("GET", "POST"))
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for(get_dashboard_endpoint(current_user)))
@@ -139,7 +167,12 @@ def login():
             .first()
         )
 
-        if user is None or not user.check_password(password):
+        if (
+            user is None
+            or not user.is_active
+            or len(password) > 128
+            or not user.check_password(password)
+        ):
             login_error = "Invalid username or password."
             flash(login_error, "error")
             create_audit_log(
@@ -147,12 +180,16 @@ def login():
                 "login_failed",
                 "User",
                 None,
-                f"Failed login attempt for username/email '{username}'.",
+                "Failed login attempt.",
             )
             db.session.commit()
         else:
+            session.clear()
+            session.permanent = True
             login_user(user, remember=remember_me)
-            create_audit_log(user, "login_success", "User", str(user.id), f"{user.username} logged in.")
+            create_audit_log(
+                user, "login_success", "User", str(user.id), f"{user.username} logged in."
+            )
             db.session.commit()
             flash("Welcome back.", "success")
             return redirect(get_next_url(get_dashboard_endpoint(user)))
@@ -163,11 +200,14 @@ def login():
     )
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=("POST",))
 @login_required
 def logout():
-    create_audit_log(current_user, "logout", "User", str(current_user.id), f"{current_user.username} logged out.")
+    create_audit_log(
+        current_user, "logout", "User", str(current_user.id), f"{current_user.username} logged out."
+    )
     db.session.commit()
     logout_user()
+    session.clear()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))

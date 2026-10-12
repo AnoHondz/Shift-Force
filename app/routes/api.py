@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
@@ -15,8 +17,8 @@ def serialize_employee(employee):
         "email": employee.email,
         "job_title": employee.job_title,
         "department": employee.department.name if employee.department else None,
-        "hourly_rate": float(employee.hourly_rate),
-        "overtime_multiplier": float(employee.overtime_multiplier),
+        "hourly_rate": str(employee.hourly_rate),
+        "overtime_multiplier": str(employee.overtime_multiplier),
         "schedule": employee.schedule,
     }
 
@@ -30,9 +32,18 @@ def employee_list():
     if current_user.is_employee():
         query = query.filter_by(id=current_user.employee_id)
 
-    pagination = query.order_by(Employee.last_name, Employee.first_name).paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.order_by(Employee.last_name, Employee.first_name).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     employees = [serialize_employee(emp) for emp in pagination.items]
-    return jsonify({"employees": employees, "page": pagination.page, "pages": pagination.pages, "total": pagination.total})
+    return jsonify(
+        {
+            "employees": employees,
+            "page": pagination.page,
+            "pages": pagination.pages,
+            "total": pagination.total,
+        }
+    )
 
 
 @api_bp.route("/payroll")
@@ -40,11 +51,15 @@ def employee_list():
 def payroll_list():
     page = parse_positive_int(request.args.get("page"), default=1)
     per_page = parse_positive_int(request.args.get("per_page"), default=25, maximum=100)
-    query = PayrollRecord.query.options(joinedload(PayrollRecord.employee).joinedload(Employee.department))
+    query = PayrollRecord.query.options(
+        joinedload(PayrollRecord.employee).joinedload(Employee.department)
+    )
     if current_user.is_employee():
         query = query.filter_by(employee_id=current_user.employee_id)
 
-    pagination = query.order_by(PayrollRecord.work_date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.order_by(PayrollRecord.work_date.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     records = [
         {
             "id": record.id,
@@ -54,12 +69,20 @@ def payroll_list():
             "hours_worked": float(record.hours_worked),
             "regular_hours": float(record.regular_hours),
             "overtime_hours": float(record.overtime_hours),
-            "total_pay": float(record.total_pay),
+            "total_pay": str(record.total_pay),
+            "status": record.status,
             "notes": record.notes,
         }
         for record in pagination.items
     ]
-    return jsonify({"payroll_records": records, "page": pagination.page, "pages": pagination.pages, "total": pagination.total})
+    return jsonify(
+        {
+            "payroll_records": records,
+            "page": pagination.page,
+            "pages": pagination.pages,
+            "total": pagination.total,
+        }
+    )
 
 
 @api_bp.route("/attendance")
@@ -67,22 +90,35 @@ def payroll_list():
 def attendance_list():
     page = parse_positive_int(request.args.get("page"), default=1)
     per_page = parse_positive_int(request.args.get("per_page"), default=25, maximum=100)
-    query = Attendance.query.options(joinedload(Attendance.employee).joinedload(Employee.department))
+    query = Attendance.query.options(
+        joinedload(Attendance.employee).joinedload(Employee.department)
+    )
     if current_user.is_employee():
         query = query.filter_by(employee_id=current_user.employee_id)
 
-    pagination = query.order_by(Attendance.date.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.order_by(Attendance.date.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     records = [
         {
             "id": record.id,
             "employee": record.employee.full_name(),
             "department": record.employee.department.name if record.employee.department else None,
             "date": record.date.isoformat(),
-            "clock_in_at": record.clock_in_at.isoformat(),
-            "clock_out_at": record.clock_out_at.isoformat() if record.clock_out_at else None,
+            "clock_in_at": record.clock_in_at.replace(tzinfo=timezone.utc).isoformat(),
+            "clock_out_at": record.clock_out_at.replace(tzinfo=timezone.utc).isoformat()
+            if record.clock_out_at
+            else None,
             "hours_worked": float(record.hours_worked),
             "status": record.status,
         }
         for record in pagination.items
     ]
-    return jsonify({"attendance_records": records, "page": pagination.page, "pages": pagination.pages, "total": pagination.total})
+    return jsonify(
+        {
+            "attendance_records": records,
+            "page": pagination.page,
+            "pages": pagination.pages,
+            "total": pagination.total,
+        }
+    )
