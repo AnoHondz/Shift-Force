@@ -5,8 +5,9 @@ import json
 import secrets
 import tempfile
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask_migrate import upgrade
 from playwright.sync_api import expect, sync_playwright
@@ -124,6 +125,89 @@ def main():
                 expect(page.get_by_text("Off shift", exact=True)).to_be_visible()
                 completed.append("Logout and administrator sign-in")
 
+                page.get_by_role("navigation", name="Main navigation").get_by_role(
+                    "link", name="Manage workplace", exact=True
+                ).click()
+                expect(page).to_have_url(origin + "/manage")
+                capture(page, "manage-workplace")
+                page.get_by_role("link", name="Punches", exact=False).click()
+                page.get_by_text("Add missed punches", exact=True).click()
+                with app.app_context():
+                    employee_id = User.query.filter_by(username="demo.employee").one().employee_id
+                yesterday = datetime.now(ZoneInfo("America/New_York")).replace(
+                    hour=9, minute=0, second=0, microsecond=0
+                ) - timedelta(days=1)
+                page.get_by_label("Employee", exact=True).select_option(str(employee_id))
+                page.get_by_label("Clock in", exact=True).fill(yesterday.strftime("%Y-%m-%dT%H:%M"))
+                page.get_by_label("Clock out (leave blank if still working)", exact=True).fill(
+                    (yesterday + timedelta(hours=7)).strftime("%Y-%m-%dT%H:%M")
+                )
+                page.get_by_label("Reason for correction").fill("Forgot to punch yesterday")
+                page.get_by_role("button", name="Save punches").click()
+                expect(page.get_by_text("Punches saved.", exact=False)).to_be_visible()
+                capture(page, "missed-punches")
+                with app.app_context():
+                    missed_id = (
+                        Attendance.query.filter_by(employee_id=employee_id)
+                        .order_by(Attendance.id.desc())
+                        .first()
+                        .id
+                    )
+                page.goto(origin + f"/manage/punches?edit={missed_id}")
+                page.get_by_label("Clock out (leave blank if still working)", exact=True).fill(
+                    (yesterday + timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M")
+                )
+                page.get_by_label("Reason for correction").fill("Correct end time from shift notes")
+                page.get_by_role("button", name="Save punches").click()
+                with app.app_context():
+                    assert db.session.get(Attendance, missed_id).hours_worked == 8
+                completed.append("Management entry, missed punches and audited correction")
+
+                page.goto(origin + "/schedule")
+                page.get_by_text("Add a shift", exact=True).click()
+                tomorrow = yesterday + timedelta(days=2)
+                page.get_by_label("Employee", exact=True).select_option(str(employee_id))
+                page.get_by_label("Start", exact=True).fill(tomorrow.strftime("%Y-%m-%dT%H:%M"))
+                page.get_by_label("End", exact=True).fill(
+                    (tomorrow + timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M")
+                )
+                page.get_by_label("Notes (optional)").fill("Front desk coverage")
+                page.get_by_role("button", name="Save shift").click()
+                expect(page.get_by_text("Schedule saved.", exact=True)).to_be_visible()
+                capture(page, "schedule")
+                completed.append("Manager publishes dated shift")
+
+                coworker_context = browser.new_context(viewport={"width": 1440, "height": 1000})
+                coworker = coworker_context.new_page()
+                coworker.on("pageerror", lambda error: browser_errors.append(str(error)))
+                coworker.goto(origin + "/login")
+                coworker.get_by_label("Email or Username").fill("demo.employee")
+                coworker.get_by_label("Password", exact=True).first.fill(
+                    credentials["demo.employee"]
+                )
+                coworker.get_by_role("button", name="Sign In", exact=True).click()
+                expect(coworker.get_by_text("Front desk coverage", exact=True)).to_be_visible()
+                coworker.get_by_label("Message your team").fill("Can someone cover the front desk?")
+                coworker.get_by_role("button", name="Send", exact=True).click()
+                expect(
+                    coworker.get_by_text("Can someone cover the front desk?", exact=True)
+                ).to_be_visible()
+                page.goto(origin + "/chat")
+                expect(
+                    page.get_by_text("Can someone cover the front desk?", exact=True)
+                ).to_be_visible()
+                page.get_by_label("Message your team").fill("I can help. See you tomorrow!")
+                page.get_by_role("button", name="Send", exact=True).click()
+                expect(
+                    coworker.get_by_text("I can help. See you tomorrow!", exact=True)
+                ).to_be_visible(timeout=12000)
+                capture(page, "team-chat")
+                capture(coworker, "employee-workspace")
+                page.goto(origin + "/dashboard")
+                capture(page, "dashboard")
+                coworker_context.close()
+                completed.append("Coworker chat across separate signed-in sessions with polling")
+
                 page.goto(origin + "/employees/new")
                 for label, value in {
                     "First Name": "Sam",
@@ -201,6 +285,9 @@ def main():
                     ("/dashboard", "dashboard-mobile"),
                     ("/employees", "employees-mobile"),
                     ("/payroll", "payroll-mobile"),
+                    ("/schedule", "schedule-mobile"),
+                    ("/chat", "team-chat-mobile"),
+                    ("/manage", "manage-workplace-mobile"),
                 ]:
                     page.goto(origin + path)
                     assert page.evaluate(
@@ -221,7 +308,7 @@ def main():
                         region.evaluate("el => el.scrollLeft = 0")
                     capture(page, name)
                 completed.append(
-                    "Mobile dashboard, directory and payroll: no horizontal page overflow"
+                    "Mobile home, directory, payroll, schedule, chat and management: no page overflow"
                 )
                 assert browser_errors == [], browser_errors
                 browser.close()

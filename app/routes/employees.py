@@ -46,9 +46,9 @@ def home():
     return redirect(url_for("auth.login"))
 
 
-@employee_bp.route("/dashboard")
+@employee_bp.route("/management/overview")
 @login_required
-def dashboard():
+def operations_overview():
     if not current_user.has_admin_access():
         return redirect(url_for("employees.employee_dashboard"))
 
@@ -127,7 +127,7 @@ def dashboard():
     )
 
     return render_template(
-        "dashboard.html",
+        "operations_overview.html",
         active_page="dashboard",
         page_title="Workforce Overview",
         today=today,
@@ -149,50 +149,24 @@ def dashboard():
     )
 
 
+@employee_bp.route("/dashboard")
+@login_required
+def dashboard():
+    from .workplace import render_today
+
+    if not current_user.has_admin_access():
+        return redirect(url_for("employees.employee_dashboard"))
+    return render_today()
+
+
 @employee_bp.route("/employee/dashboard")
 @login_required
 def employee_dashboard():
-    profile = get_current_employee()
-    if profile is None:
-        flash("Your account is not linked to an employee profile.", "error")
-        return render_template(
-            "error.html",
-            message="Your account needs an employee profile. Contact an administrator.",
-        ), 403
+    from .workplace import render_today
 
-    records = (
-        PayrollRecord.query.filter_by(employee_id=profile.id)
-        .order_by(PayrollRecord.work_date.desc())
-        .limit(8)
-        .all()
-    )
-    leave_requests = (
-        LeaveRequest.query.filter_by(employee_id=profile.id)
-        .order_by(LeaveRequest.submitted_at.desc())
-        .limit(5)
-        .all()
-    )
-
-    summary = {
-        "hours": sum(record.hours_worked for record in records),
-        "overtime": sum(record.overtime_hours for record in records),
-        "pay": sum(record.total_pay for record in records),
-    }
-    next_shift = profile.schedule or "Schedule pending"
-
-    return render_template(
-        "dashboard.html",
-        active_page="employee-dashboard",
-        page_title="My Workspace",
-        my_profile=profile,
-        my_records=records,
-        leave_requests=leave_requests,
-        my_summary=summary,
-        next_shift=next_shift,
-        stats=None,
-        shift_employee=profile,
-        active_shift=Attendance.query.filter_by(employee_id=profile.id, clock_out_at=None).first(),
-    )
+    if get_current_employee() is None:
+        abort(403, description="Your account needs an employee profile. Contact an administrator.")
+    return render_today()
 
 
 @employee_bp.route("/employees")

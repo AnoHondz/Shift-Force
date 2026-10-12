@@ -1,6 +1,6 @@
 # Workforce Platform
 
-A full-stack employee operations application built with Python and Flask. It brings employee records, time entries, attendance, leave approvals, notifications, and payroll estimates into one role-aware workspace.
+A full-stack workforce application built with Python and Flask. A simple Today screen brings together the shift clock, upcoming schedule, and shared coworker chat. Authorized staff use Manage workplace to correct punches, plan shifts, and manage employee records.
 
 Built by **Anotida Hondonga** as a software engineering portfolio project. The existing Flask/Jinja architecture is preserved and strengthened with explicit migrations, tested business rules, and safer administration.
 
@@ -14,6 +14,10 @@ Small teams often track employee details, hours, attendance, and leave in separa
 
 ## Features
 
+- Focused everyday navigation: Today, Schedule, and Team chat; staff tools under Manage workplace and personal tools under My account.
+- Persistent shared team chat with authenticated authors, CSRF-protected sending, escaped text, and automatic polling across signed-in coworker sessions.
+- Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
+- Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
 - Employee-only registration, hashed passwords, CSRF-protected sessions, login throttling, and explicit CLI administration.
 - Daily timesheet totals, Monday–Sunday overtime allocation, decimal monetary calculations, submitted rate snapshots, and approval resets after corrections.
@@ -44,7 +48,7 @@ flowchart LR
 
 ## Database design
 
-Eight domain tables model departments, employees, users, payroll records, attendance records, leave requests, notifications, and audit logs.
+Ten domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, team messages, leave requests, notifications, and audit logs.
 
 ```mermaid
 erDiagram
@@ -52,14 +56,16 @@ erDiagram
     EMPLOYEE ||--o| USER : has_account
     EMPLOYEE ||--o{ PAYROLL_RECORD : submits
     EMPLOYEE ||--o{ ATTENDANCE : clocks
+    EMPLOYEE ||--o{ SCHEDULED_SHIFT : scheduled_for
     EMPLOYEE ||--o{ LEAVE_REQUEST : requests
     USER ||--o{ NOTIFICATION : receives
+    USER ||--o{ TEAM_MESSAGE : sends
     USER o|--o{ AUDIT_LOG : performs
     USER o|--o{ PAYROLL_RECORD : reviews
     USER o|--o{ LEAVE_REQUEST : reviews
 ```
 
-Foreign keys are enforced on SQLite connections. Unique daily payroll entries and active shifts, monetary/date constraints, indexes, leave overlap triggers, and optimistic versions for payroll/leave protect data integrity. Employee archival disables associated login access and retains history. Payroll voiding retains the row and recalculates its workweek.
+Foreign keys are enforced on SQLite connections. Unique daily payroll entries and active shifts, monetary/date constraints, indexes, overlap triggers for leave and shifts, and optimistic versions for payroll, leave, attendance, and schedules protect data integrity. Employee archival disables associated login access and retains history. Payroll voiding retains the row and recalculates its workweek.
 
 ## Authentication and permissions
 
@@ -73,8 +79,20 @@ Registration always creates an employee role and cannot claim an existing employ
 | Archive employee records | — | — | — | — | Yes |
 | Review payroll / log another employee's hours | — | Yes | — | Yes | Yes |
 | Review leave / attendance actions for others | — | Yes | Yes | — | Yes |
+| Correct punches / create, edit, cancel shifts | — | Yes | Yes | — | Yes |
+| Shared coworker chat | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile |
 
 Every inbox remains private, including administrator inboxes. Reviewers cannot approve their own payroll or leave. Management read access is organization-wide; department-level manager scoping is a future improvement.
+
+## Everyday use and management
+
+After signing in, **Today** shows your own Clock in / Clock out button, upcoming dated shifts, and team chat. **Schedule** opens this week's shifts with previous/next week navigation. Employees see their own schedule; management roles can read the workplace schedule. No shifts are inferred from a profile's typical hours.
+
+Open **Manage workplace → Punches** to select **Correct**, fix times, enter a reason, and save. **Add missed punches** creates a shift that was never clocked. Clock out may be left blank for someone still working. Corrected punches retain their record ID and an audit of old/new values; review any affected payroll entry separately.
+
+Open **Manage workplace → Schedule → Add a shift** to choose an employee, dates/times, and optional notes. Existing shifts have Edit and Cancel shift controls. Cancellation retains the stored shift and audit history. Times use `WORKFORCE_TIMEZONE`; ambiguous or nonexistent clock-change times are rejected.
+
+**Team chat** is one shared room for active coworkers in this installation. Messages persist in the database and update about every eight seconds while the page is visible. The current view shows recent messages; there are no attachments, direct messages, push alerts, presence indicators, or message deletion controls. Other tools, including payroll, reports, and audit history, are available from the management page.
 
 ## Install and run a fresh local demo
 
@@ -132,7 +150,7 @@ The workweek runs **Monday through Sunday**. The first 40 hours are regular hour
 
 Money uses `Decimal` with half-up cent rounding and submitted compensation snapshots. Reports exclude rejected/voided entries; pending/reviewed entries remain estimates. Payroll and leave updates use optimistic versions to prevent stale reviews from overwriting corrections.
 
-Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries; daily timesheet totals remain a separate review workflow. Overnight shifts must be allocated to work dates when submitting timesheets. A trusted operator can reconcile incorrect or stale shifts using `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
+Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries; daily timesheet totals remain a separate review workflow. Overnight shifts must be allocated to work dates when submitting timesheets. Managers, HR, administrators, and executives can reconcile punches through Manage workplace. Trusted server operators also have `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
 
 ## Testing and quality
 
@@ -157,11 +175,14 @@ Captured from the running application with synthetic records on October 12, 2026
 |---|---|
 | Login | [Screenshot](docs/screenshots/login.png) |
 | Employee workspace | [Screenshot](docs/screenshots/employee-workspace.png) |
+| Management and missed punches | [Manage workplace](docs/screenshots/manage-workplace.png) · [Punches](docs/screenshots/missed-punches.png) |
+| Dated schedule and coworker chat | [Schedule](docs/screenshots/schedule.png) · [Team chat](docs/screenshots/team-chat.png) |
 | Directory and employee profile | [Directory](docs/screenshots/employees.png) · [Profile](docs/screenshots/employee-profile.png) |
 | Payroll | [Screenshot](docs/screenshots/payroll.png) |
 | Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |
 | Notifications, reporting, audit | [Inbox](docs/screenshots/notifications.png) · [Reports](docs/screenshots/reports.png) · [Audit](docs/screenshots/audit.png) |
 | Mobile | [Dashboard](docs/screenshots/dashboard-mobile.png) · [Directory](docs/screenshots/employees-mobile.png) · [Payroll](docs/screenshots/payroll-mobile.png) |
+| Mobile workplace tools | [Schedule](docs/screenshots/schedule-mobile.png) · [Chat](docs/screenshots/team-chat-mobile.png) · [Manage workplace](docs/screenshots/manage-workplace-mobile.png) |
 
 Regenerate only from a successful run using `python -m scripts.browser_smoke --screenshots`.
 

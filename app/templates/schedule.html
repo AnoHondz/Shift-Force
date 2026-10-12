@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h5">Week of {{ week.strftime('%b %d, %Y') }}</h2><p class="text-muted small mb-0">Times shown in {{ timezone_name }}{% if not current_user.has_admin_access() %} · Your shifts{% endif %}</p></div><div class="d-flex gap-2"><a class="btn btn-ghost" href="{{ url_for('workplace.schedule', days=days-7) }}">Previous</a><a class="btn btn-ghost" href="{{ url_for('workplace.schedule') }}">This week</a><a class="btn btn-ghost" href="{{ url_for('workplace.schedule', days=days+7) }}">Next</a></div></div>
+<section class="surface-card mb-4" aria-label="Scheduled shifts">
+  {% for shift in shifts %}
+  <div class="schedule-row"><div><strong>{{ shift.employee.full_name() }}</strong><div>{{ shift.starts_at|localtime }} → {{ shift.ends_at|localtime }}</div>{% if shift.notes %}<div class="small text-muted">{{ shift.notes }}</div>{% endif %}</div>
+  {% if current_user.role in Role.LEAVE_REVIEW %}<div class="d-flex gap-2"><a class="btn btn-ghost btn-sm" href="{{ url_for('workplace.schedule', edit=shift.id, days=days) }}#shift-form">Edit</a><form method="post" action="{{ url_for('workplace.cancel_shift', shift_id=shift.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ shift.version_id }}" /><button class="btn btn-ghost btn-sm">Cancel shift</button></form></div>{% endif %}</div>
+  {% else %}<p class="text-muted mb-0">No shifts posted for this week.</p>{% endfor %}
+</section>
+{% if current_user.role in Role.LEAVE_REVIEW %}
+<details class="surface-card" {% if editing %}open{% endif %}><summary>{{ 'Edit shift' if editing else 'Add a shift' }}</summary>
+<form method="post" id="shift-form" class="workplace-form mt-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />{% if editing %}<input type="hidden" name="shift_id" value="{{ editing.id }}" /><input type="hidden" name="version_id" value="{{ editing.version_id }}" />{% endif %}
+<div><label class="form-label" for="scheduled-employee">Employee</label><select class="form-select" id="scheduled-employee" name="employee_id" required><option value="">Choose an employee</option>{% for employee in employees %}<option value="{{ employee.id }}" {% if editing and editing.employee_id == employee.id %}selected{% endif %}>{{ employee.full_name() }}</option>{% endfor %}</select></div>
+<div><label class="form-label" for="shift-start">Start</label><input class="form-control" id="shift-start" type="datetime-local" name="starts_at" value="{{ local_input(editing.starts_at) if editing else '' }}" required /></div>
+<div><label class="form-label" for="shift-end">End</label><input class="form-control" id="shift-end" type="datetime-local" name="ends_at" value="{{ local_input(editing.ends_at) if editing else '' }}" required /></div>
+<div><label class="form-label" for="shift-notes">Notes (optional)</label><input class="form-control" id="shift-notes" name="notes" maxlength="255" value="{{ editing.notes if editing else '' }}" placeholder="For example: front desk" /></div>
+<button class="btn btn-primary justify-self-start" type="submit">Save shift</button></form></details>
+{% endif %}
+{% endblock %}

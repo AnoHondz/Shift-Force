@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="text-muted mb-4">The tools for keeping your workplace running.</p>
+<div class="manage-grid">
+  <a class="surface-card manage-tile" href="{{ url_for('workplace.punches') }}"><i class="bi bi-clock-history"></i><h2 class="h4">Punches</h2><p>Fix missed clock-ins and clock-outs.</p></a>
+  <a class="surface-card manage-tile" href="{{ url_for('workplace.schedule') }}"><i class="bi bi-calendar-week"></i><h2 class="h4">Schedule</h2><p>Add, change, or cancel shifts.</p></a>
+  <a class="surface-card manage-tile" href="{{ url_for('employees.employee_directory') }}"><i class="bi bi-people"></i><h2 class="h4">People</h2><p>View your team and employee details.</p></a>
+</div>
+{% if current_user.role == Role.PAYROLL %}<p class="text-muted mt-3">Punch and schedule changes are handled by a manager, HR, or administrator.</p>{% endif %}
+<details class="surface-card mt-4"><summary>Other tools</summary><div class="manage-tools mt-3">
+  <a href="{{ url_for('employees.payroll') }}">Payroll</a><a href="{{ url_for('leave.index') }}">Time off approvals</a><a href="{{ url_for('reports.index') }}">Reports</a><a href="{{ url_for('employees.operations_overview') }}">Workforce overview</a><a href="{{ url_for('audit.index') }}">Audit history</a><a href="{{ url_for('employees.settings') }}">Settings</a>
+</div></details>
+{% endblock %}

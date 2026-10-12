@@ -5,7 +5,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
-from .integrity import register_leave_constraints
+from .integrity import register_leave_constraints, register_shift_constraints
 from .payroll import Workweek, calculate_pay
 
 
@@ -315,6 +315,8 @@ class Attendance(db.Model):
     status = db.Column(db.String(32), nullable=False, default="In Progress")
     date = db.Column(db.Date, nullable=False, default=date.today)
     created_at = db.Column(db.DateTime, default=utcnow)
+    version_id = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    __mapper_args__ = {"version_id_col": version_id}
 
     employee = db.relationship("Employee", back_populates="attendance_records", lazy="joined")
 
@@ -359,6 +361,37 @@ class Attendance(db.Model):
         return f"<Attendance {self.employee.full_name()} {self.date} {self.status}>"
 
 
+class ScheduledShift(db.Model):
+    __tablename__ = "scheduled_shifts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    starts_at = db.Column(db.DateTime, nullable=False)
+    ends_at = db.Column(db.DateTime, nullable=False)
+    notes = db.Column(db.String(255), nullable=False, default="")
+    cancelled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    version_id = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    __mapper_args__ = {"version_id_col": version_id}
+    employee = db.relationship("Employee", lazy="joined")
+    __table_args__ = (
+        db.CheckConstraint("ends_at > starts_at", name="ck_schedule_times"),
+        db.Index("ix_schedule_employee_start", "employee_id", "starts_at"),
+    )
+
+
+class TeamMessage(db.Model):
+    __tablename__ = "team_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    body = db.Column(db.String(2000), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    user = db.relationship("User", lazy="joined")
+    __table_args__ = (
+        db.CheckConstraint("length(body) BETWEEN 1 AND 2000", name="ck_message_length"),
+    )
+
+
 class Notification(db.Model):
     __tablename__ = "notifications"
 
@@ -397,6 +430,9 @@ class AuditLog(db.Model):
         "role_updated",
         "password_reset",
         "attendance_corrected",
+        "schedule_created",
+        "schedule_updated",
+        "schedule_cancelled",
         "employee_created",
         "employee_updated",
         "employee_deleted",
@@ -442,3 +478,5 @@ def create_audit_log(user, action_type, target_type, target_id, description):
 
 
 register_leave_constraints(LeaveRequest.__table__)
+register_shift_constraints(Attendance.__table__)
+register_shift_constraints(ScheduledShift.__table__)

@@ -36,7 +36,7 @@ def test_fresh_migration_and_second_upgrade_are_idempotent(tmp_path):
         upgrade()
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0002_integrity"
+            == "0003_workplace"
         )
 
 
@@ -65,6 +65,36 @@ def test_existing_legacy_installation_preserves_records(tmp_path):
         assert record == (45, 950, "Preserve historical weekly entry", 1, 20)
         assert db.session.execute(text("SELECT COUNT(*) FROM employees")).scalar() == 1
         assert db.session.execute(text("PRAGMA foreign_key_check")).all() == []
+
+
+def test_workplace_upgrade_preserves_existing_punches_and_initializes_empty_tools(tmp_path):
+    app = migration_app(tmp_path)
+    with app.app_context():
+        upgrade(revision="0002_integrity")
+        db.session.execute(
+            text(
+                "INSERT INTO employees (id,first_name,last_name,email,job_title,schedule,hourly_rate,overtime_multiplier,date_hired,archived) VALUES (1,'Existing','Employee','existing@example.com','Engineer','Weekdays',30,1.5,'2026-10-01',0)"
+            )
+        )
+        db.session.execute(
+            text(
+                "INSERT INTO attendance_records (employee_id,clock_in_at,clock_out_at,hours_worked,status,date,created_at) VALUES (1,'2026-10-09 13:00:00','2026-10-09 21:00:00',8,'Completed','2026-10-09','2026-10-09 13:00:00')"
+            )
+        )
+        before = db.session.execute(text("SELECT * FROM attendance_records")).one()
+        db.session.commit()
+        upgrade()
+        after = db.session.execute(text("SELECT * FROM attendance_records")).one()
+        assert tuple(after[:-1]) == tuple(before) and after[-1] == 1
+        assert db.session.execute(text("SELECT COUNT(*) FROM scheduled_shifts")).scalar() == 0
+        assert db.session.execute(text("SELECT COUNT(*) FROM team_messages")).scalar() == 0
+        triggers = (
+            db.session.execute(text("SELECT name FROM sqlite_master WHERE type='trigger'"))
+            .scalars()
+            .all()
+        )
+        assert "attendance_records_no_overlap_update" in triggers
+        assert "scheduled_shifts_no_overlap_insert" in triggers
 
 
 def test_invalid_legacy_data_stops_migration_without_removing_records(tmp_path):
@@ -97,5 +127,5 @@ def test_migration_downgrade_refuses_destructive_changes(tmp_path):
             downgrade(revision="0001_baseline")
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0002_integrity"
+            == "0003_workplace"
         )

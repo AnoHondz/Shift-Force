@@ -1,0 +1,15 @@
+<section class="surface-card team-chat" aria-label="Team chat" data-chat data-endpoint="{{ url_for('workplace.messages') }}" data-timezone="{{ config.get('WORKFORCE_TIMEZONE', 'UTC') }}">
+  <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h5 mb-0">Team chat</h2><span class="small text-muted">Everyone at work</span></div>
+  <div class="chat-messages" role="log" aria-label="Coworker messages" aria-live="polite">
+    {% for message in messages %}
+    <article class="chat-message" data-message-id="{{ message.id }}"><div class="chat-message-heading"><strong>{{ message.user.employee.full_name() if message.user.employee else message.user.username }}</strong><time datetime="{{ message.created_at.isoformat() }}Z">{{ message.created_at|localtime }}</time></div><p>{{ message.body }}</p></article>
+    {% endfor %}
+    <p class="chat-empty text-muted" {% if messages %}hidden{% endif %}>Say hello to your team.</p>
+  </div>
+  <form class="chat-compose">
+    <label class="form-label" for="team-message">Message your team</label>
+    <textarea class="form-control" id="team-message" name="body" rows="2" maxlength="2000" required placeholder="Write a message…"></textarea>
+    <div class="d-flex justify-content-between align-items-center gap-2 mt-2"><span class="small text-muted" data-chat-status role="status">Updates automatically</span><button class="btn btn-primary" type="submit">Send</button></div>
+  </form>
+  <noscript>Enable JavaScript to send messages and see new replies.</noscript>
+</section>

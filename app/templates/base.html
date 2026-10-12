@@ -20,29 +20,25 @@
               <div class="brand-mark">WP</div>
               <div>
                 <div class="brand-title">Workforce Platform</div>
-                <div class="brand-caption">Authorized personnel only</div>
+                <div class="brand-caption">Your workplace, together</div>
               </div>
             </div>
             <div class="nav-group-title">Main</div>
             <nav class="nav flex-column nav-enterprise" aria-label="Main navigation">
+              <a class="nav-link {% if active_page == 'today' %}active{% endif %}" href="{{ url_for('employees.dashboard') }}"><i aria-hidden="true" class="bi bi-house"></i> Today</a>
+              <a class="nav-link {% if active_page == 'schedule' %}active{% endif %}" href="{{ url_for('workplace.schedule') }}"><i aria-hidden="true" class="bi bi-calendar-week"></i> Schedule</a>
+              <a class="nav-link {% if active_page == 'chat' %}active{% endif %}" href="{{ url_for('workplace.chat') }}"><i aria-hidden="true" class="bi bi-chat-dots"></i> Team chat</a>
               {% if current_user.has_admin_access() %}
-                <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('employees.dashboard') }}"><i class="bi bi-speedometer2"></i> Workforce Overview</a>
-                <a class="nav-link {% if active_page == 'employees' %}active{% endif %}" href="{{ url_for('employees.employee_directory') }}"><i class="bi bi-people"></i> Employees</a>
-                <a class="nav-link {% if active_page == 'payroll' %}active{% endif %}" href="{{ url_for('employees.payroll') }}"><i class="bi bi-cash-stack"></i> Hours and Payroll</a>
-                <a class="nav-link {% if active_page == 'leave' %}active{% endif %}" href="{{ url_for('leave.index') }}"><i class="bi bi-calendar-week"></i> Leave and Schedule</a>
-                <a class="nav-link {% if active_page == 'reports' %}active{% endif %}" href="{{ url_for('reports.index') }}"><i class="bi bi-bar-chart-line"></i> Reports</a>
-                <a class="nav-link {% if active_page == 'notifications' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="bi bi-inboxes"></i> Approval Center {% if unread_notification_count > 0 %}<span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</a>
-                <a class="nav-link {% if active_page == 'audit' %}active{% endif %}" href="{{ url_for('audit.index') }}"><i class="bi bi-shield-check"></i> Audit Trail</a>
-                <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="{{ url_for('employees.settings') }}"><i class="bi bi-sliders"></i> System Settings</a>
-              {% else %}
-                <a class="nav-link {% if active_page == 'employee-dashboard' %}active{% endif %}" href="{{ url_for('employees.employee_dashboard') }}"><i class="bi bi-grid-1x2"></i> My Workspace</a>
-                <a class="nav-link {% if active_page == 'payroll' %}active{% endif %}" href="{{ url_for('employees.payroll') }}"><i class="bi bi-clock-history"></i> Hours and Pay</a>
-                <a class="nav-link {% if active_page == 'leave' %}active{% endif %}" href="{{ url_for('leave.index') }}"><i class="bi bi-calendar-check"></i> Leave and Schedule</a>
-                <a class="nav-link {% if active_page == 'team' %}active{% endif %}" href="{{ url_for('employees.team_directory') }}"><i class="bi bi-person-lines-fill"></i> Team Directory</a>
-                <a class="nav-link {% if active_page == 'notifications' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="bi bi-bell"></i> Notifications {% if unread_notification_count > 0 %}<span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</a>
+              <a class="nav-link {% if active_page == 'manage' %}active{% endif %}" href="{{ url_for('workplace.manage') }}"><i aria-hidden="true" class="bi bi-sliders"></i> Manage workplace</a>
               {% endif %}
-              <a class="nav-link {% if active_page == 'attendance' %}active{% endif %}" href="{{ url_for('attendance.index') }}"><i class="bi bi-clock"></i> Attendance</a>
-              <a class="nav-link {% if active_page == 'profile' %}active{% endif %}" href="{{ url_for('employees.profile') }}"><i class="bi bi-person-circle"></i> Profile</a>
+              <details class="workplace-more"><summary>My account {% if unread_notification_count %}<span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</summary>
+                <a class="nav-link" href="{{ url_for('employees.profile') }}">Profile</a>
+                <a class="nav-link" href="{{ url_for('attendance.index') }}">Punch history</a>
+                <a class="nav-link" href="{{ url_for('employees.payroll') }}">Hours and pay</a>
+                <a class="nav-link" href="{{ url_for('leave.index') }}">Time off</a>
+                <a class="nav-link" href="{{ url_for('employees.team_directory') }}">Coworkers</a>
+                <a class="nav-link" href="{{ url_for('notifications.index') }}">Notifications</a>
+              </details>
             </nav>
           </div>
           <form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-outline-light btn-sm w-100" type="submit">Sign out</button></form>
@@ -52,12 +48,9 @@
           <header class="app-topbar">
             <div>
               <h1 class="topbar-title">{{ page_title or 'Internal Workforce Platform' }}</h1>
-              <div class="topbar-caption">{{ role_label(current_user.role) }} access · System access is monitored</div>
+              <div class="topbar-caption">Your shift. Your team.</div>
             </div>
             <div class="topbar-user">
-              <div class="text-end">
-                <div class="muted-meta">Last updated: <span id="lastUpdatedLabel">just now</span></div>
-              </div>
               <div class="avatar-chip">{{ current_user.username[:2]|upper }}</div>
               <div>
                 <div class="fw-semibold" style="color:#f0f5ff">{{ current_user.username }}</div>
@@ -85,7 +78,7 @@
                       {% set title = 'Attention' %}
                     {% endif %}
                     <div class="alert alert-{{ alert_class }} enterprise-alert alert-dismissible fade show" role="alert">
-                      <i class="bi {{ icon }}"></i>
+                      <i aria-hidden="true" class="bi {{ icon }}"></i>
                       <div>
                         <div class="flash-title">{{ title }}</div>
                         <div>{{ message }}</div>
@@ -130,11 +123,6 @@
         const input = label.parentElement.querySelector('input:not([type=hidden]), select, textarea');
         if (input) { input.id ||= 'field-' + index; label.htmlFor = input.id; }
       });
-      const lastUpdatedLabel = document.getElementById('lastUpdatedLabel');
-      if (lastUpdatedLabel) {
-        const now = new Date();
-        lastUpdatedLabel.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
     </script>
     {% block scripts %}{% endblock %}
   </body>

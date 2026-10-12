@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Today · Workforce{% endblock %}
+{% block content %}
+<div class="workplace-greeting"><h2>Hi, {{ shift_employee.first_name if shift_employee else current_user.username }}.</h2><p class="text-muted">Ready for the day?</p></div>
+<div class="workplace-grid">
+  <div>
+    {% include "_shift_clock.html" %}
+    {% if not shift_employee %}<div class="surface-card mb-4">Ask an administrator to link your employee profile to use the shift clock and team chat.</div>{% endif %}
+    <section class="surface-card" aria-label="Your schedule">
+      <div class="d-flex justify-content-between gap-2 mb-3"><h2 class="h5">Coming up</h2><a href="{{ url_for('workplace.schedule') }}">View schedule</a></div>
+      {% for shift in upcoming %}
+        <div class="shift-line"><strong>{{ shift.starts_at|localtime }}</strong><div class="text-muted small">Until {{ shift.ends_at|localtime }}</div>{% if shift.notes %}<p class="mb-0 small">{{ shift.notes }}</p>{% endif %}</div>
+      {% else %}<p class="text-muted mb-0">No upcoming shifts posted yet.</p>{% endfor %}
+    </section>
+    {% if current_user.has_admin_access() %}<a class="workplace-management-link" href="{{ url_for('workplace.manage') }}"><i class="bi bi-sliders"></i> Manage workplace <span class="text-muted small">Fix punches · Plan shifts · People</span></a>{% endif %}
+  </div>
+  {% if shift_employee and not shift_employee.archived %}{% include "_team_chat.html" %}{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/team-chat.js') }}"></script>{% endblock %}

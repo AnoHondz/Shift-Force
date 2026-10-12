@@ -37,3 +37,12 @@ Notifications are stored/delivered to the intended in-app user, and read/mark-al
 Employee archival preserves user, timesheet, attendance, leave, and audit records and disables the user's login/session access. Self-archival is refused, and an active shift must be completed first. Financial records are voided rather than deleted. Audit logs include workflow/security events and payroll correction hours; they are not an external, immutable audit service.
 
 Management read access is intentionally organization-wide in this version. Department-level manager permissions, automated shift allocation, and configurable legal payroll policies require additional design and validation.
+# Workplace schedule, corrections, and chat
+
+The Today page presents the signed-in employee's clock, upcoming dated shifts, and a shared team conversation. Management controls are under Manage workplace. Managers, HR, administrators, and executives may add or correct punches and create, edit, or cancel schedules; payroll has read access. Employees read only their own dated shifts.
+
+Browser punch corrections require a reason and retain the same record ID, with audited old/new times and hours. Entire missed shifts can also be added. Actual punches cannot be future timestamps or overlap another attendance record, and completed shifts must last more than zero and no more than 24 hours. An empty clock-out keeps the shift active. Corrections do not update payroll automatically. Optimistic versions reject stale forms and SQLite triggers prevent overlapping shift writes.
+
+Schedules use actual dates and UTC storage with configured local-time inputs/display. They may cross midnight but must last no more than 24 hours. Cancellation retains the record. Cancelled shifts disappear from employee schedules, and the cancellation is audited. Profile typical-hours text is separate from the dated schedule. Local times that are ambiguous or nonexistent during daylight-saving changes are rejected.
+
+Team chat is shared by active employee-linked accounts within this installation, including all staff roles. Authors are always the authenticated user. Bodies are plain text of 1–2,000 characters, safely escaped in server-rendered HTML and inserted with textContent during polling. Sending requires CSRF and is limited to 30 messages per minute per user. Views show the most recent 25 messages initially and up to 100 during updates; stored messages are retained. Chat currently has no attachments, direct messages, moderation, or retention controls.

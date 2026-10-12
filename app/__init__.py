@@ -68,6 +68,7 @@ def create_app(config_object=None):
     @app.errorhandler(400)
     @app.errorhandler(403)
     @app.errorhandler(404)
+    @app.errorhandler(409)
     @app.errorhandler(429)
     def client_error(error):
         if request.path.startswith("/api/") or request.is_json:
