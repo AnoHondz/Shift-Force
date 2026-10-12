@@ -1,7 +1,10 @@
+from conftest import TEST_PASSWORD
+
+from app.extensions import db
 from app.models import PayrollRecord
 
 
-def login(client, username, password="password123"):
+def login(client, username, password=TEST_PASSWORD):
     return client.post(
         "/login",
         data={"username": username, "password": password},
@@ -14,7 +17,7 @@ def test_login_and_logout_flow(client, users):
     assert response.status_code == 302
     assert "/dashboard" in response.headers["Location"]
 
-    logout_response = client.get("/logout", follow_redirects=False)
+    logout_response = client.post("/logout", follow_redirects=False)
     assert logout_response.status_code == 302
     assert "/login" in logout_response.headers["Location"]
 
@@ -34,15 +37,19 @@ def test_admin_can_access_admin_pages(client, users):
 
 def test_payroll_review_requires_admin(client, app, users, payroll_record):
     login(client, "employee_user")
-    response = client.post(f"/payroll/{payroll_record}/review", data={"action": "approve"}, follow_redirects=False)
+    response = client.post(
+        f"/payroll/{payroll_record}/review", data={"action": "approve"}, follow_redirects=False
+    )
     assert response.status_code == 302
     assert "/employee/dashboard" in response.headers["Location"]
 
-    client.get("/logout", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
     login(client, "admin_user")
-    response = client.post(f"/payroll/{payroll_record}/review", data={"action": "approve"}, follow_redirects=False)
+    response = client.post(
+        f"/payroll/{payroll_record}/review", data={"action": "approve"}, follow_redirects=False
+    )
     assert response.status_code == 302
 
     with app.app_context():
-        updated = PayrollRecord.query.get(payroll_record)
+        updated = db.session.get(PayrollRecord, payroll_record)
         assert updated.status == "Approved"

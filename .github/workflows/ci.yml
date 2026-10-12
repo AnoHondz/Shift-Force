@@ -1,0 +1,26 @@
+name: Workforce quality checks
+on:
+  push:
+    branches: [master, codex/workforce-production-readiness]
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check app tests scripts migrations config.py run.py
+      - run: python -m ruff format --check app tests scripts migrations config.py run.py
+      - run: python -m pytest -q
+      - run: python -m scripts.security_check
+      - run: python -m bandit -r app config.py run.py
+      - run: python -m pip_audit -r requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m scripts.browser_smoke
