@@ -4,9 +4,9 @@ Final local verification was completed on October 12, 2026, on Windows with Pyth
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **102 passed, 0 failed**, 30.09 seconds |
+| `python -m pytest -q` | **111 passed, 0 failed**, 37.42 seconds after the dashboard shift-clock addition |
 | Ruff lint | All checks passed |
-| Ruff formatting | 37 Python files already formatted |
+| Ruff formatting | 38 Python files already formatted |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | 27 resolved runtime packages, 0 known vulnerabilities at the time of the audit |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -16,7 +16,9 @@ Final local verification was completed on October 12, 2026, on Windows with Pyth
 | Disposable original-database migration | All original values and rows in eight tables preserved; foreign-key check passed; original file hash unchanged |
 | Chromium browser verification | Nine workflow checks passed, 0 browser errors; 14 real screenshots captured |
 
-The browser script exercised employee login with CSRF, attendance clock-in/out, leave submission, POST logout, administrator login, employee creation/search/edit/profile, cross-day overtime and payroll approval, leave approval, inbox/audit pages, CSV/PDF downloads, and mobile dashboard/directory/payroll without horizontal page overflow. Screenshots use synthetic records only.
+The browser script exercised employee login with CSRF, dashboard clock-in/out for both employee and administrator accounts, persisted shift status after reload, attendance history, leave submission, POST logout, administrator login, employee creation/search/edit/profile, cross-day overtime and payroll approval, leave approval, inbox/audit pages, CSV/PDF downloads, and mobile dashboard/directory/payroll without horizontal page overflow. Screenshots use synthetic records only.
+
+Nine shift-clock regressions verify all six account roles can clock their own shifts, submitted employee IDs cannot target another person, duplicate starts do not create extra shifts, worked hours and audit entries are recorded, and authentication, profile linkage, valid actions, and CSRF are required. The attendance-management permission rules are unchanged.
 
 The automated tests additionally cover role and ownership restrictions, employee archival and retained history, login throttling, hostile redirect variants, invalid numerical input, partial workweeks, compensation snapshots, correction-driven approval resets, voiding, formula-safe CSV, UTC offsets, leave overlap triggers, duplicate active shifts, foreign keys, optimistic concurrency, trusted administration commands, fresh/legacy migrations, invalid-data migration refusal, and destructive downgrade refusal.
 

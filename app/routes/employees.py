@@ -142,6 +142,10 @@ def dashboard():
         alerts=alerts,
         recent_hires=recent_hires,
         activity_logs=activity_logs,
+        shift_employee=get_current_employee(),
+        active_shift=Attendance.query.filter_by(
+            employee_id=current_user.employee_id, clock_out_at=None
+        ).first(),
     )
 
 
@@ -186,6 +190,8 @@ def employee_dashboard():
         my_summary=summary,
         next_shift=next_shift,
         stats=None,
+        shift_employee=profile,
+        active_shift=Attendance.query.filter_by(employee_id=profile.id, clock_out_at=None).first(),
     )
 
 

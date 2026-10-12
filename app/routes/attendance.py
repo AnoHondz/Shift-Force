@@ -12,6 +12,63 @@ from ..utils import get_current_employee, parse_date, parse_positive_int
 attendance_bp = Blueprint("attendance", __name__, url_prefix="/attendance")
 
 
+def _clock_shift(employee, action, destination):
+    if action not in {"clock_in", "clock_out"}:
+        abort(400, description="Choose clock in or clock out.")
+    if employee.archived:
+        abort(400, description="Archived employees cannot clock in or out.")
+    active_record = Attendance.query.filter_by(employee_id=employee.id, clock_out_at=None).first()
+    now = utcnow()
+    if action == "clock_in":
+        if active_record:
+            flash("You must clock out before starting a new shift.", "error")
+            return redirect(url_for(destination))
+        db.session.add(
+            Attendance(
+                employee_id=employee.id,
+                clock_in_at=now,
+                date=now.replace(tzinfo=timezone.utc)
+                .astimezone(ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
+                .date(),
+                status="In Progress",
+            )
+        )
+        action_type = "attendance_clocked_in"
+        description = f"{employee.full_name()} clocked in."
+        message = "Clocked in successfully."
+    else:
+        if not active_record:
+            flash("No active clock-in found for this employee.", "error")
+            return redirect(url_for(destination))
+        try:
+            active_record.complete_shift(now)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for(destination))
+        action_type = "attendance_clocked_out"
+        description = (
+            f"{employee.full_name()} clocked out after {active_record.hours_worked} hours."
+        )
+        message = "Clocked out successfully."
+    create_audit_log(current_user, action_type, "Attendance", str(employee.id), description)
+    db.session.commit()
+    flash(message, "success")
+    return redirect(url_for(destination))
+
+
+@attendance_bp.route("/shift", methods=("POST",))
+@login_required
+def my_shift():
+    """Clock the signed-in person's own shift, regardless of management role."""
+    employee = get_current_employee()
+    if employee is None:
+        abort(403, description="Your account needs an employee profile to start a shift.")
+    destination = (
+        "employees.dashboard" if current_user.has_admin_access() else "employees.employee_dashboard"
+    )
+    return _clock_shift(employee, request.form.get("action"), destination)
+
+
 @attendance_bp.route("/", methods=("GET", "POST"))
 @login_required
 def index():
@@ -53,61 +110,7 @@ def index():
         if not selected_employee_id:
             abort(400, description="Your account needs an employee profile.")
         target_employee = db.get_or_404(Employee, int(selected_employee_id))
-        if target_employee.archived:
-            abort(400, description="Archived employees cannot clock in or out.")
-        if action == "clock_in":
-            active_record = Attendance.query.filter_by(
-                employee_id=target_employee.id, clock_out_at=None
-            ).first()
-            if active_record:
-                flash("You must clock out before starting a new shift.", "error")
-                return redirect(url_for("attendance.index"))
-
-            attendance = Attendance(
-                employee_id=target_employee.id,
-                clock_in_at=utcnow(),
-                date=utcnow()
-                .replace(tzinfo=timezone.utc)
-                .astimezone(ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
-                .date(),
-                status="In Progress",
-            )
-            db.session.add(attendance)
-            create_audit_log(
-                current_user,
-                "attendance_clocked_in",
-                "Attendance",
-                str(target_employee.id),
-                f"{target_employee.full_name()} clocked in.",
-            )
-            db.session.commit()
-            flash("Clocked in successfully.", "success")
-            return redirect(url_for("attendance.index"))
-
-        if action == "clock_out":
-            active_record = Attendance.query.filter_by(
-                employee_id=target_employee.id, clock_out_at=None
-            ).first()
-            if not active_record:
-                flash("No active clock-in found for this employee.", "error")
-                return redirect(url_for("attendance.index"))
-
-            try:
-                active_record.complete_shift(utcnow())
-            except ValueError as exc:
-                flash(str(exc), "error")
-                return redirect(url_for("attendance.index"))
-
-            create_audit_log(
-                current_user,
-                "attendance_clocked_out",
-                "Attendance",
-                str(target_employee.id),
-                f"{target_employee.full_name()} clocked out after {active_record.hours_worked} hours.",
-            )
-            db.session.commit()
-            flash("Clocked out successfully.", "success")
-            return redirect(url_for("attendance.index"))
+        return _clock_shift(target_employee, action, "attendance.index")
 
     attendance_query = Attendance.query.options(joinedload(Attendance.employee)).order_by(
         Attendance.clock_in_at.desc()

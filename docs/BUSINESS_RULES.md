@@ -14,6 +14,8 @@ Pending and reviewed entries shown in reports are **estimates**, not completed d
 
 ## Attendance
 
+Every linked account can use **Your shift** on its dashboard to clock in and out of its own shift. The status changes from Off shift to On shift and shows the start time in the configured timezone. The personal clock always uses the signed-in employee identity, including for management roles; submitted employee IDs cannot target someone else. Management attendance permissions remain separate.
+
 Clock events use server time in UTC. The database stores naive UTC datetimes; the UI shows the configured IANA timezone and records the clock-in date in that timezone. API timestamps include an explicit UTC offset. Offset-aware corrections are normalized to UTC. Duplicate active shifts are prohibited by a partial unique index, including under concurrent insert attempts.
 
 Clock-out must follow clock-in, a completed shift cannot be completed again, and a shift cannot exceed 24 hours. Overnight shifts are allowed within that limit. Attendance does not write payroll automatically; users submit reviewed daily timesheet totals separately and allocate overnight work to the applicable dates.

@@ -17,7 +17,7 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
 - Employee-only registration, hashed passwords, CSRF-protected sessions, login throttling, and explicit CLI administration.
 - Daily timesheet totals, Monday–Sunday overtime allocation, decimal monetary calculations, submitted rate snapshots, and approval resets after corrections.
-- Clock-in/out with UTC storage, configurable display timezone, and a database constraint preventing duplicate active shifts.
+- Dashboard clock-in/out with personal shift status, UTC storage, configurable display timezone, and a database constraint preventing duplicate active shifts.
 - Leave date validation, overlap prevention at both application and database levels, authorized reviews, and self-approval protection.
 - Private notification inboxes, searchable audit logs, charts, and CSV/PDF exports with empty-dataset handling.
 - Paginated, authenticated read-only JSON APIs for employees, payroll, and attendance.

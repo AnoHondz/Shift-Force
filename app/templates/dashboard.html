@@ -14,6 +14,8 @@
 
   <p class="section-note mb-3">Operational health snapshot across payroll, staffing, and pending approvals.</p>
 
+  {% include "_shift_clock.html" %}
+
   <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Total Headcount</div><p class="kpi-value">{{ stats.employee_count }}</p><div class="kpi-meta">Active workforce</div></div></div>
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Payroll This Week</div><p class="kpi-value">{{ stats.payroll_total_week|currency }}</p><div class="kpi-meta">Week to date · submitted estimates</div></div></div>
@@ -122,6 +124,8 @@
   {% endcall %}
 
   <p class="section-note mb-3">Track recent hours, pay estimates, and leave request updates.</p>
+
+  {% include "_shift_clock.html" %}
 
   <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3"><div class="kpi-card"><div class="kpi-label">Hours Logged</div><p class="kpi-value">{{ my_summary.hours|hours if my_summary else '0.00' }}</p></div></div>

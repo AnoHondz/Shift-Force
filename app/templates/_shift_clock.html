@@ -1,0 +1,24 @@
+{% if shift_employee %}
+<section class="surface-card mb-4" aria-label="Your shift">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <h2 class="h6 mb-2">Your shift</h2>
+      {% if active_shift %}
+        <span class="status-badge status-active">On shift</span>
+        <p class="small text-muted mb-0 mt-2">Started {{ active_shift.clock_in_at|localtime }}. Clock out when you finish.</p>
+      {% else %}
+        <span class="status-badge status-pending">Off shift</span>
+        <p class="small text-muted mb-0 mt-2">Clock in to start your shift and record your attendance.</p>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('attendance.my_shift') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="action" value="{{ 'clock_out' if active_shift else 'clock_in' }}" />
+      <button type="submit" class="btn {{ 'btn-ghost' if active_shift else 'btn-primary' }}">
+        <i class="bi {{ 'bi-stop-circle' if active_shift else 'bi-play-circle' }}" aria-hidden="true"></i>
+        {{ 'Clock out' if active_shift else 'Clock in' }}
+      </button>
+    </form>
+  </div>
+</section>
+{% endif %}

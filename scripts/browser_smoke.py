@@ -79,15 +79,23 @@ def main():
                 capture(page, "employee-workspace")
                 completed.append("Employee sign-in with CSRF")
 
-                page.goto(origin + "/attendance/")
-                page.get_by_role("button", name="Clock In", exact=True).click()
+                page.get_by_role("region", name="Your shift").get_by_role(
+                    "button", name="Clock in", exact=True
+                ).click()
+                expect(page).to_have_url(origin + "/employee/dashboard")
+                expect(page.get_by_text("On shift", exact=True)).to_be_visible()
                 with app.app_context():
                     Attendance.query.one().clock_in_at = utcnow() - timedelta(hours=2)
                     db.session.commit()
-                page.get_by_role("button", name="Clock Out", exact=True).click()
+                page.reload()
+                page.get_by_role("region", name="Your shift").get_by_role(
+                    "button", name="Clock out", exact=True
+                ).click()
                 expect(page.get_by_text("Clocked out successfully.", exact=True)).to_be_visible()
+                expect(page.get_by_text("Off shift", exact=True)).to_be_visible()
+                page.goto(origin + "/attendance/")
                 capture(page, "attendance")
-                completed.append("Attendance clock-in and clock-out")
+                completed.append("Dashboard shift start/end and attendance history")
 
                 page.goto(origin + "/leave/new")
                 page.get_by_label("Leave Type").select_option("Vacation")
@@ -105,6 +113,15 @@ def main():
                 page.get_by_role("button", name="Sign In", exact=True).click()
                 expect(page).to_have_url(origin + "/dashboard")
                 capture(page, "dashboard")
+                page.get_by_role("region", name="Your shift").get_by_role(
+                    "button", name="Clock in", exact=True
+                ).click()
+                expect(page).to_have_url(origin + "/dashboard")
+                expect(page.get_by_text("On shift", exact=True)).to_be_visible()
+                page.get_by_role("region", name="Your shift").get_by_role(
+                    "button", name="Clock out", exact=True
+                ).click()
+                expect(page.get_by_text("Off shift", exact=True)).to_be_visible()
                 completed.append("Logout and administrator sign-in")
 
                 page.goto(origin + "/employees/new")
