@@ -18,6 +18,7 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Low-light charcoal theme and Shiftspace branding, with Today dedicated to the shift clock and schedule.
 - Persistent chat channels with authenticated authors, CSRF-protected sending, escaped text, earlier-message loading, and automatic polling across signed-in coworker sessions. Administrators and executives can create channels.
 - Protected picture sharing with previews, validated/normalized uploads, stripped metadata, bounded dimensions/file sizes, and storage covered by SQLite backups.
+- Searchable emoji picker with categories, skin tones, keyboard navigation, and newer iPhone emoji; all 3,944 Unicode 17.0 fully qualified sequences are available.
 - Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
@@ -99,6 +100,8 @@ Open **Manage workplace → Schedule → Add a shift** to choose an employee, da
 
 **Team chat** opens a channel list, conversation, and coworker list in a Discord-style layout. Administrators and executives use **Create channel** to add separate conversations. All channels are visible to active employee-linked accounts in this installation; channels are not private membership groups. Existing conversations remain in **#general**. Messages persist, update about every eight seconds while the page is visible, and support loading earlier messages. Enter sends; Shift+Enter adds a line break.
 
+The smile button opens **Choose emoji**: search across categories, choose a skin tone, or browse **New on iPhone**. **All variations** includes mixed-tone combinations. Emoji insert at the message cursor and respect the message length limit. Escape closes the picker; arrow keys navigate its emoji choices. Artwork uses the device's native emoji font: Apple artwork on compatible iPhones/Macs, Windows artwork on Windows. The locally served catalog uses [Unicode 17.0 data](https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt), including the additions described in [Apple's iOS update notes](https://support.apple.com/en-au/123075). Its [Unicode license](docs/licenses/UNICODE.txt) is included. Apple fonts/artwork are not redistributed; appearance and newer-character support depend on the installed OS.
+
 Use **Add picture** to preview and send one JPG, PNG, WebP, or GIF per message, up to 5 MB and 12 million source pixels. Pictures are resized to at most 2,048 pixels on the longest edge, normalized to JPEG/PNG, and stripped of original metadata. GIF uploads become a still picture. Attachments require an active authenticated coworker account and remain in SQLite with their messages, so backups include pictures. Direct messages, private channels, presence, push alerts, moderation, and deletion controls are not implemented. Other tools, including payroll, reports, and audit history, are available from the management page.
 
 ## Install and run a fresh local demo
@@ -176,7 +179,7 @@ Tests use disposable databases and freshly generated credentials. The GitHub Act
 
 ## Screenshots
 
-Captured from the running application with synthetic records on October 12, 2026:
+Captured from the running application with synthetic records on October 13, 2026:
 
 | Screen | Preview |
 |---|---|
@@ -185,6 +188,7 @@ Captured from the running application with synthetic records on October 12, 2026
 | Management and missed punches | [Manage workplace](docs/screenshots/manage-workplace.png) · [Punches](docs/screenshots/missed-punches.png) |
 | Dated schedule and coworker chat | [Schedule](docs/screenshots/schedule.png) · [Team chat](docs/screenshots/team-chat.png) |
 | General channel | [Screenshot](docs/screenshots/chat-general.png) |
+| Emoji picker | [Desktop](docs/screenshots/emoji-picker.png) · [Mobile](docs/screenshots/emoji-picker-mobile.png) |
 | Directory and employee profile | [Directory](docs/screenshots/employees.png) · [Profile](docs/screenshots/employee-profile.png) |
 | Payroll | [Screenshot](docs/screenshots/payroll.png) |
 | Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |

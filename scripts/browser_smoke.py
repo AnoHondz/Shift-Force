@@ -221,6 +221,57 @@ def main():
                     "link", name="shift-swaps", exact=True
                 ).click()
                 expect(coworker).to_have_url(origin + f"/chat/{channel_id}")
+                composer = page.get_by_label("Message your team")
+                composer.fill("Great  team")
+                composer.evaluate("input => input.setSelectionRange(6, 6)")
+                composer.press("ArrowLeft")
+                composer.press("ArrowRight")
+                page.get_by_role("button", name="Choose emoji", exact=True).click()
+                picker = page.get_by_role("dialog", name="Choose emoji", exact=True)
+                expect(
+                    picker.get_by_role("button", name="grinning face", exact=True)
+                ).to_be_visible()
+                capture(page, "emoji-picker")
+                picker.get_by_label("Search emoji", exact=True).fill("thumbs up")
+                picker.get_by_label("Skin tone", exact=True).select_option("4")
+                picker.get_by_role(
+                    "button", name="thumbs up: medium-dark skin tone", exact=True
+                ).click()
+                expect(composer).to_have_value("Great 👍🏾 team")
+                expect(picker).to_be_hidden()
+                page.get_by_role("button", name="Send", exact=True).click()
+                expect(coworker.get_by_text("Great 👍🏾 team", exact=True)).to_be_visible(
+                    timeout=12000
+                )
+                page.reload()
+                expect(page.get_by_text("Great 👍🏾 team", exact=True)).to_be_visible()
+                page.get_by_role("button", name="Choose emoji", exact=True).click()
+                picker.get_by_role("button", name="New on iPhone", exact=True).click()
+                expect(picker.get_by_role("button", name="orca", exact=True)).to_be_visible()
+                picker.get_by_label("Search emoji", exact=True).fill("grinning face")
+                picker.get_by_label("Search emoji", exact=True).press("Enter")
+                expect(
+                    picker.get_by_role("button", name="grinning face", exact=True)
+                ).to_be_focused()
+                page.keyboard.press("ArrowRight")
+                expect(
+                    picker.get_by_role("button", name="grinning face with big eyes", exact=True)
+                ).to_be_focused()
+                page.keyboard.press("Escape")
+                expect(picker).to_be_hidden()
+                expect(page.get_by_role("button", name="Choose emoji", exact=True)).to_be_focused()
+                composer.fill("a" * 2000)
+                page.get_by_role("button", name="Choose emoji", exact=True).click()
+                picker.get_by_role("button", name="grinning face", exact=True).click()
+                expect(
+                    picker.get_by_text("Your message is full. Remove some text to add an emoji.")
+                ).to_be_visible()
+                expect(composer).to_have_value("a" * 2000)
+                picker.get_by_role("button", name="Close emoji picker", exact=True).click()
+                composer.fill("")
+                completed.append(
+                    "Emoji search, categories, skin tones, caret insertion, keyboard controls, message limit and shared persistence"
+                )
                 photo = Image.new("RGB", (480, 240), "#292a35")
                 drawing = ImageDraw.Draw(photo)
                 drawing.rectangle((18, 18, 462, 222), fill="#3d3a50")
@@ -356,6 +407,21 @@ def main():
                         assert region.evaluate("el => el.scrollLeft > 0")
                         region.evaluate("el => el.scrollLeft = 0")
                     capture(page, name)
+                    if path == f"/chat/{channel_id}":
+                        page.get_by_role("button", name="Choose emoji", exact=True).click()
+                        mobile_picker = page.get_by_role("dialog", name="Choose emoji", exact=True)
+                        expect(
+                            mobile_picker.get_by_role("button", name="grinning face", exact=True)
+                        ).to_be_visible()
+                        box = mobile_picker.bounding_box()
+                        assert box["x"] >= 0 and box["x"] + box["width"] <= 390
+                        assert page.evaluate(
+                            "document.documentElement.scrollWidth <= window.innerWidth"
+                        )
+                        capture(page, "emoji-picker-mobile")
+                        mobile_picker.get_by_role(
+                            "button", name="Close emoji picker", exact=True
+                        ).click()
                 completed.append(
                     "Mobile home, directory, payroll, schedule, chat and management: no page overflow"
                 )

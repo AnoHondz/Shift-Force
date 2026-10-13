@@ -121,11 +121,6 @@
     reader.readAsDataURL(file);
   });
   panel.querySelector('[data-remove-picture]').addEventListener('click', clearPicture);
-  panel.querySelector('[data-emoji]').addEventListener('click', () => {
-    if (sending) return;
-    input.setRangeText('\u{1F642}', input.selectionStart, input.selectionEnd, 'end');
-    input.focus();
-  });
   input.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();

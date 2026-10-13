@@ -17,4 +17,4 @@
   <aside class="coworker-sidebar" aria-label="Coworkers"><div class="channel-list-heading">COWORKERS <span>{{ coworkers|length }}</span></div>{% for person in coworkers %}<div class="coworker-item"><span class="member-avatar">{{ person.first_name[:1] }}{{ person.last_name[:1] }}</span><div><strong>{{ person.full_name() }}</strong><span>{{ person.department.name if person.department else person.job_title }}</span></div></div>{% endfor %}</aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/team-chat.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/emoji-picker.js') }}"></script><script src="{{ url_for('static', filename='js/team-chat.js') }}"></script>{% endblock %}

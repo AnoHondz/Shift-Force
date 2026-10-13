@@ -12,7 +12,15 @@
     <div class="picture-preview" data-picture-preview hidden><img alt="Picture ready to share" /><span data-picture-name></span><button type="button" data-remove-picture aria-label="Remove picture">×</button></div>
     <label class="visually-hidden" for="team-message">Message your team</label>
     <textarea id="team-message" name="body" rows="2" maxlength="2000" placeholder="Message #{{ channel.name }}"></textarea>
-    <div class="compose-toolbar"><div class="d-flex align-items-center gap-2"><label class="picture-picker" for="chat-picture" title="Attach a picture"><i class="bi bi-plus-circle" aria-hidden="true"></i><span>Add picture</span></label><input type="file" id="chat-picture" name="picture" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" /><button type="button" class="emoji-picker" data-emoji aria-label="Add a smile emoji">☺</button></div><button class="btn btn-primary" type="submit"><i class="bi bi-send" aria-hidden="true"></i> Send</button></div>
+    <div class="compose-toolbar"><div class="d-flex align-items-center gap-2"><label class="picture-picker" for="chat-picture" title="Attach a picture"><i class="bi bi-plus-circle" aria-hidden="true"></i><span>Add picture</span></label><input type="file" id="chat-picture" name="picture" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" /><button type="button" class="emoji-picker" data-emoji aria-label="Choose emoji" aria-expanded="false" aria-controls="emoji-popover" aria-haspopup="dialog">☺</button></div><button class="btn btn-primary" type="submit"><i class="bi bi-send" aria-hidden="true"></i> Send</button></div>
+    <div id="emoji-popover" class="emoji-popover" role="dialog" aria-label="Choose emoji" data-emoji-catalog="{{ url_for('static', filename='data/emoji.json') }}" hidden>
+      <div class="emoji-popover-heading"><strong>Emoji</strong><button type="button" data-emoji-close aria-label="Close emoji picker">×</button></div>
+      <label class="visually-hidden" for="emoji-search">Search emoji</label><input id="emoji-search" class="form-control" type="search" placeholder="Search emoji" autocomplete="off" />
+      <nav class="emoji-categories" aria-label="Emoji categories"></nav>
+      <div class="emoji-filter"><span data-emoji-heading>Smileys</span><label class="visually-hidden" for="emoji-tone">Skin tone</label><select id="emoji-tone" class="form-select"><option value="0">Default tone</option><option value="1">🏻 Light</option><option value="2">🏼 Medium-light</option><option value="3">🏽 Medium</option><option value="4">🏾 Medium-dark</option><option value="5">🏿 Dark</option><option value="all">All variations</option></select></div>
+      <div class="emoji-grid" role="group" aria-label="Emoji choices"></div>
+      <div class="emoji-picker-status" data-emoji-status role="status">Choose an emoji to add it to your message.</div>
+    </div>
   </form>
   <div class="chat-footer"><span data-chat-status role="status">Updates automatically</span><span>Pictures up to 5 MB · Enter to send</span></div>
   <noscript>Enable JavaScript to send messages and see new replies.</noscript>
