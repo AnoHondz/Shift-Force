@@ -18,4 +18,5 @@
     <dt class="col-sm-4">Record</dt><dd class="col-sm-8">{{ 'Archived' if employee.archived else 'Active' }}</dd>
   </dl>
 </div>
+{% if store_info and current_user.role in Role.PEOPLE_EDIT and not employee.archived and not employee.user %}<div class="surface-card mt-3"><h2 class="h5">Give {{ employee.first_name }} access</h2><p class="text-muted">Create an invitation to join this store.</p><form method="post" action="{{ url_for('stores.invite', employee_id=employee.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-primary" type="submit">Invite to this store</button></form></div>{% endif %}
 {% endblock %}

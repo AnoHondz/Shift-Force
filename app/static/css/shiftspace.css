@@ -30,6 +30,33 @@ a:hover { color:#d8d1fa; }
 .auth-feature-list i { color:#bcb0f5; }
 .auth-brand-premium::after { display:none; }
 .today-workspace { max-width:920px; margin:auto; }
+.brand-title, .brand-caption, .channel-workspace strong { overflow-wrap:anywhere; }
+.store-signin-links { display:flex; flex-direction:column; gap:10px; margin-top:20px; font-size:.8rem; }
+.stores-workspace { max-width:1000px; margin:auto; }
+.stores-intro h2 { font-size:1.3rem; }
+.stores-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:20px; }
+.store-card h3 { font-size:1.1rem; margin:18px 0 6px; overflow-wrap:anywhere; }
+.store-location { color:#bcb5cf; margin-bottom:18px; overflow-wrap:anywhere; }
+.store-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:12px; background:#3b344d; color:#c1b2f1; font-size:1.2rem; flex-shrink:0; }
+.store-link { font-size:.75rem; margin-bottom:10px; }
+.add-store { margin-top:24px; }
+.add-store summary { color:#c1b2f1; }
+.store-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:22px; }
+.store-form .btn { justify-self:start; }
+.store-options { grid-column:1 / -1; font-size:.85rem; }
+.store-options summary { color:#aaa6ba; }
+.store-options-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:16px; }
+.find-store { width:calc(100% - 28px); max-width:620px; margin:60px auto; }
+.find-store h1 { font-size:1.6rem; margin-top:20px; }
+.store-search-row { display:flex; gap:10px; }
+.store-search-row input { min-width:0; }
+.store-results { margin:25px 0; }
+.store-result { display:flex; align-items:center; gap:14px; padding:15px 0; border-bottom:1px solid #343540; text-decoration:none; }
+.store-result > span:nth-child(2) { min-width:0; flex:1; }
+.store-result strong { color:#e4def3; overflow-wrap:anywhere; }
+.store-result span span { display:block; color:#aaa6ba; font-size:.8rem; margin-top:4px; overflow-wrap:anywhere; }
+.store-invite { max-width:720px; margin:auto; }
+@media (max-width:650px) { .store-form, .store-options-fields { grid-template-columns:minmax(0,1fr); } .find-store { margin:28px auto; } .store-search-row { flex-direction:column; } }
 .today-workspace > div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:24px; align-items:start; }
 .today-workspace .surface-card { margin:0 !important; }
 .workplace-greeting { max-width:920px; margin:8px auto 30px; }

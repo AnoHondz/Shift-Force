@@ -44,7 +44,7 @@ def schedule_data(users):
     )
 
 
-@pytest.mark.parametrize("role", Role.CHOICES)
+@pytest.mark.parametrize("role", Role.WORKPLACE_CHOICES)
 def test_manager_tools_permissions(client, app, users, role):
     with app.app_context():
         db.session.get(User, users["admin_id"]).role = role

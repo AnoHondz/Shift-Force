@@ -20,10 +20,12 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Protected picture sharing with previews, validated/normalized uploads, stripped metadata, bounded dimensions/file sizes, and storage covered by SQLite backups.
 - Searchable emoji picker with categories, skin tones, keyboard navigation, and newer iPhone emoji; all 3,944 Unicode 17.0 fully qualified sequences are available.
 - Optional seven-day remembered sign-in on this device; signing out removes its cookie, while unchecked sign-in uses a browser session.
+- Separate store workspaces with location sign-in links, private staff/schedules/chats/pictures, and an owner account that can switch across its locations.
+- Simple store search by business or street and manager-generated, seven-day invitations for staff to join the correct location.
 - Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
-- Employee-only registration, hashed passwords, CSRF-protected sessions, login throttling, and explicit CLI administration.
+- Employee invitations, restricted owner registration, hashed passwords, CSRF-protected sessions, per-location login throttling, and explicit CLI administration.
 - Daily timesheet totals, Monday–Sunday overtime allocation, decimal monetary calculations, submitted rate snapshots, and approval resets after corrections.
 - Dashboard clock-in/out with personal shift status, UTC storage, configurable display timezone, and a database constraint preventing duplicate active shifts.
 - Leave date validation, overlap prevention at both application and database levels, authorized reviews, and self-approval protection.
@@ -52,7 +54,7 @@ flowchart LR
 
 ## Database design
 
-Twelve domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, and audit logs.
+Thirteen domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, audit logs, and the hub's store registry. Each store has its own migrated SQLite database; the hub registry records its owner, display name, location, time zone, and generated storage key.
 
 ```mermaid
 erDiagram
@@ -75,7 +77,7 @@ Foreign keys are enforced on SQLite connections. Unique daily payroll entries an
 
 ## Authentication and permissions
 
-Registration always creates an employee role and cannot claim an existing employee email. It is disabled by default in production. Elevated roles are assigned using `flask set-role` by someone with trusted server access.
+Workplace registration creates an employee role. Inside a store, an invitation is required and attaches the account to the manager's existing employee profile. `/owner/signup` creates a restricted hub owner who can create/open only their own stores; it cannot grant access to the legacy hub workplace. Both forms ignore submitted role fields. Public registration is disabled by default in production; owner registration can be enabled with `PUBLIC_STORE_OWNER_REGISTRATION=true`. Trusted operators can assign the hub `owner` role with `flask set-role`. Other elevated workplace roles remain trusted CLI assignments.
 
 | Action | Employee | Manager | HR | Payroll | Admin / Executive |
 |---|---|---|---|---|---|
@@ -89,9 +91,15 @@ Registration always creates an employee role and cannot claim an existing employ
 | Shared coworker chat | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile | Yes, active profile |
 | Create chat channels | — | — | — | — | Yes |
 
-Every inbox remains private, including administrator inboxes. Reviewers cannot approve their own payroll or leave. Management read access is organization-wide; department-level manager scoping is a future improvement.
+Every inbox remains private, including administrator inboxes. Reviewers cannot approve their own payroll or leave. Management read access is workplace-wide within the selected store; department-level manager scoping is a future improvement.
 
 ## Everyday use and management
+
+Owners sign in to **My stores**, enter a business name and location, and choose **Create store**. Store codes are generated automatically; a collapsed option allows a custom code or time zone. Each card has **Open location** and a sign-in link such as `/s/mcdonalds-broad-street/login`. The owner can return to **My stores** from each location. New owner accounts see only store management in the hub.
+
+Staff use their location's link or **Find your store** to search the business and street. In that store, authorized people managers add a staff record, open its profile, and choose **Invite to this store**. The invitation lasts seven days and can be accepted once; it creates employee access for that profile. Staff, schedules, chats, images, punches, payroll, notifications, and reports remain in that location's database. Channels within a store are visible to all its active coworkers.
+
+Routing uses independent Flask apps under `/s/<store-code>` with generated database filenames, derived signing keys, and separate cookie names/paths. Owner entry requires a CSRF-protected POST and ownership check; invitations are signed for one location. Unknown store URLs fail closed. This follows Flask's documented [application dispatch pattern](https://flask.palletsprojects.com/en/stable/patterns/appdispatch/). Production operators must persist and back up both the hub and all store files; see [MIGRATIONS.md](docs/MIGRATIONS.md).
 
 After signing in, **Today** shows your own Clock in / Clock out button and upcoming dated shifts. **Schedule** opens this week's shifts with previous/next week navigation. Employees see their own schedule; management roles can read the workplace schedule. No shifts are inferred from a profile's typical hours.
 

@@ -21,7 +21,7 @@ def picture_bytes(size=(64, 48), mode="RGB"):
     return stream
 
 
-@pytest.mark.parametrize("role", Role.CHOICES)
+@pytest.mark.parametrize("role", Role.WORKPLACE_CHOICES)
 def test_only_admin_and_executive_create_channels(client, app, users, role):
     with app.app_context():
         db.session.get(User, users["admin_id"]).role = role

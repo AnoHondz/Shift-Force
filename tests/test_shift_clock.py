@@ -12,7 +12,7 @@ def login(client):
     return client.post("/login", data={"username": "admin_user", "password": TEST_PASSWORD})
 
 
-@pytest.mark.parametrize("role", Role.CHOICES)
+@pytest.mark.parametrize("role", Role.WORKPLACE_CHOICES)
 def test_dashboard_shift_clock_is_own_scoped_for_every_role(client, app, users, role):
     with app.app_context():
         db.session.get(User, users["admin_id"]).role = role

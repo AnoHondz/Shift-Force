@@ -21,7 +21,9 @@ class Role:
     PAYROLL = "payroll"
     MANAGER = "manager"
     EMPLOYEE = "employee"
-    CHOICES = (EXECUTIVE, ADMIN, HR, PAYROLL, MANAGER, EMPLOYEE)
+    OWNER = "owner"
+    WORKPLACE_CHOICES = (EXECUTIVE, ADMIN, HR, PAYROLL, MANAGER, EMPLOYEE)
+    CHOICES = (*WORKPLACE_CHOICES, OWNER)
     ADMIN_LIKE = (EXECUTIVE, ADMIN, HR, PAYROLL, MANAGER)
     PEOPLE_EDIT = (EXECUTIVE, ADMIN, HR)
     PAYROLL_REVIEW = (EXECUTIVE, ADMIN, PAYROLL, MANAGER)
@@ -36,6 +38,7 @@ class Role:
             cls.PAYROLL: "Payroll Admin",
             cls.MANAGER: "Manager",
             cls.EMPLOYEE: "Employee",
+            cls.OWNER: "Store owner",
         }
         if not role:
             return "Unknown"
@@ -147,7 +150,8 @@ class User(UserMixin, db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "role IN ('executive','admin','hr','payroll','manager','employee')", name="ck_user_role"
+            "role IN ('executive','admin','hr','payroll','manager','employee','owner')",
+            name="ck_user_role",
         ),
     )
 
@@ -177,6 +181,22 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f"<User {self.username} ({self.role})>"
+
+
+class Store(db.Model):
+    """The owner hub's registry; each workplace lives in its own database."""
+
+    __tablename__ = "stores"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    slug = db.Column(db.String(60), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(160), nullable=False)
+    timezone = db.Column(db.String(64), nullable=False)
+    database_key = db.Column(db.String(32), unique=True, nullable=False)
+    owner_account_id = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    __table_args__ = (db.Index("ix_store_owner", "owner_id"),)
 
 
 class PayrollRecord(db.Model):
@@ -465,6 +485,10 @@ class AuditLog(db.Model):
         "schedule_updated",
         "schedule_cancelled",
         "chat_channel_created",
+        "store_created",
+        "store_opened",
+        "store_invite_created",
+        "account_created",
         "employee_created",
         "employee_updated",
         "employee_deleted",

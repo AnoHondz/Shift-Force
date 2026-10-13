@@ -1,5 +1,11 @@
 # Workforce business rules
 
+## Store membership and owners
+
+Each location owns a separate workplace database. IDs, usernames, staff email addresses, schedules, chat channels, images, financial records, and audits belong to that selected store. A hub owner can create and enter its own locations through My stores but cannot enter another owner's locations or read the legacy hub workplace. Store-owner entry creates an administrator session only in the selected location; the owner role itself is a restricted hub role.
+
+Store creation asks for business name and location, automatically generates a unique link code, and permits an optional custom code/time zone. Staff registration inside a store requires a manager-issued invitation tied to an existing active employee profile. Acceptance creates employee access and consumes eligibility for that invitation; expiration is seven days. Manager promotions still require trusted administration. Public search displays business/location labels and sign-in links only. Channels are shared by the active coworkers of their location.
+
 ## Timesheets, workweeks, and reporting periods
 
 `PayrollRecord` is one daily total per employee/work date, representing all shifts on that date. Hours are decimal values with two places, between 0 and 24. Saving a repeated employee/date is an explicit correction of that total. Notes are bounded to 2,000 characters. Future work dates are rejected.

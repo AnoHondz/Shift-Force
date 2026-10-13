@@ -20,26 +20,29 @@
             <div class="brand-block">
               <div class="brand-mark">S</div>
               <div>
-                <div class="brand-title">Shiftspace</div>
-                <div class="brand-caption">Your workplace, together</div>
+                <div class="brand-title">{{ store_info.name if store_info else 'Shiftspace' }}</div>
+                <div class="brand-caption">{{ store_info.location if store_info else 'Your workplace, together' }}</div>
               </div>
             </div>
             <div class="nav-group-title">Main</div>
             <nav class="nav flex-column nav-enterprise" aria-label="Main navigation">
+              {% if store_info or current_user.role != Role.OWNER %}
               <a class="nav-link {% if active_page == 'today' %}active{% endif %}" href="{{ url_for('employees.dashboard') }}"><i aria-hidden="true" class="bi bi-house"></i> Today</a>
               <a class="nav-link {% if active_page == 'schedule' %}active{% endif %}" href="{{ url_for('workplace.schedule') }}"><i aria-hidden="true" class="bi bi-calendar-week"></i> Schedule</a>
               <a class="nav-link {% if active_page == 'chat' %}active{% endif %}" href="{{ url_for('workplace.chat') }}"><i aria-hidden="true" class="bi bi-chat-dots"></i> Team chat</a>
+              {% endif %}
+              {% if (not store_info and current_user.role in [Role.OWNER, Role.ADMIN, Role.EXECUTIVE]) or (store_info and current_user.id == store_info.owner_account_id) %}<a class="nav-link {% if active_page == 'stores' %}active{% endif %}" href="{{ hub_url('/stores') }}"><i aria-hidden="true" class="bi bi-shop"></i> My stores</a>{% endif %}
               {% if current_user.has_admin_access() %}
               <a class="nav-link {% if active_page == 'manage' %}active{% endif %}" href="{{ url_for('workplace.manage') }}"><i aria-hidden="true" class="bi bi-sliders"></i> Manage workplace</a>
               {% endif %}
-              <details class="workplace-more"><summary>My account {% if unread_notification_count %}<span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</summary>
+              {% if store_info or current_user.role != Role.OWNER %}<details class="workplace-more"><summary>My account {% if unread_notification_count %}<span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</summary>
                 <a class="nav-link" href="{{ url_for('employees.profile') }}">Profile</a>
                 <a class="nav-link" href="{{ url_for('attendance.index') }}">Punch history</a>
                 <a class="nav-link" href="{{ url_for('employees.payroll') }}">Hours and pay</a>
                 <a class="nav-link" href="{{ url_for('leave.index') }}">Time off</a>
                 <a class="nav-link" href="{{ url_for('employees.team_directory') }}">Coworkers</a>
                 <a class="nav-link" href="{{ url_for('notifications.index') }}">Notifications</a>
-              </details>
+              </details>{% endif %}
             </nav>
           </div>
           <form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-outline-light btn-sm w-100" type="submit">Sign out</button></form>

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="chat-layout">
   <aside class="channel-sidebar" aria-label="Chat channels">
-    <div class="channel-workspace"><span class="workspace-symbol">S</span><div><strong>Shiftspace</strong><span>Your team's space</span></div></div>
+    <div class="channel-workspace"><span class="workspace-symbol">S</span><div><strong>{{ store_info.name if store_info else 'Shiftspace' }}</strong><span>{{ store_info.location if store_info else "Your team's space" }}</span></div></div>
     <div class="channel-list-heading">CHANNELS <span>{{ channels|length }}</span></div>
     <nav class="channel-list" aria-label="Channels">
       {% for item in channels %}<a class="channel-link {% if item.id == channel.id %}selected{% endif %}" href="{{ url_for('workplace.chat', channel_id=item.id) }}" {% if item.id == channel.id %}aria-current="page"{% endif %}><span aria-hidden="true">#</span><span>{{ item.name }}</span></a>{% endfor %}

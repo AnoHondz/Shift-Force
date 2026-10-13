@@ -1,7 +1,7 @@
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
@@ -18,7 +18,10 @@ def create_app(config_object=None):
         static_folder=str(Path(__file__).resolve().parent / "static"),
     )
 
-    app.config.from_object(config_object or "config.Config")
+    if isinstance(config_object, dict):
+        app.config.update(config_object)
+    else:
+        app.config.from_object(config_object or "config.Config")
     if not app.config.get("SECRET_KEY") or len(app.config["SECRET_KEY"]) < 32:
         raise RuntimeError(
             "Set FLASK_SECRET_KEY to a randomly generated value of at least 32 characters."
@@ -42,9 +45,35 @@ def create_app(config_object=None):
     migrate.init_app(app, db, render_as_batch=True)
     login_manager.login_view = "auth.login"
     register_blueprints(app)
+    limiter.bind(app)
     from .cli import register_commands
 
     register_commands(app)
+
+    @app.before_request
+    def restrict_owner_hub():
+        if (
+            not app.config.get("STORE_SLUG")
+            and current_user.is_authenticated
+            and current_user.role == Role.OWNER
+        ):
+            if request.method == "GET" and request.endpoint in {
+                "employees.home",
+                "employees.dashboard",
+                "employees.employee_dashboard",
+            }:
+                return redirect(url_for("stores.index"))
+            if request.endpoint not in {
+                "stores.index",
+                "stores.open_store",
+                "stores.find",
+                "auth.login",
+                "auth.logout",
+                "auth.signup",
+                "auth.signup_owner",
+                "static",
+            }:
+                abort(403, description="Open one of your stores to access its workplace.")
 
     @login_manager.unauthorized_handler
     def unauthorized():
@@ -131,5 +160,29 @@ def create_app(config_object=None):
                 "Role": Role,
             }
         return {"unread_notification_count": 0, "role_label": Role.label, "Role": Role}
+
+    from .stores import StoreRouter, hub_url
+
+    @app.context_processor
+    def store_context():
+        return {"store_info": app.config.get("STORE_INFO"), "hub_url": hub_url}
+
+    @app.template_filter("workplace_link")
+    def workplace_link(value):
+        if (
+            not isinstance(value, str)
+            or not value.startswith("/")
+            or value.startswith("//")
+            or "\\" in value
+        ):
+            return None
+        if request.script_root and not value.startswith(request.script_root + "/"):
+            return request.script_root + value
+        return value
+
+    if not app.config.get("STORE_SLUG"):
+        router = StoreRouter(app, app.wsgi_app)
+        app.extensions["stores"] = router
+        app.wsgi_app = router
 
     return app

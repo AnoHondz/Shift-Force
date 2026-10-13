@@ -7,6 +7,7 @@ from .employees import employee_bp
 from .leaves import leave_bp
 from .notifications import notifications_bp
 from .reports import reports_bp
+from .stores import stores_bp
 from .workplace import workplace_bp
 
 
@@ -21,3 +22,4 @@ def register_blueprints(app):
     app.register_blueprint(notifications_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(workplace_bp)
+    app.register_blueprint(stores_bp)

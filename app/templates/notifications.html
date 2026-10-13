@@ -47,7 +47,7 @@
             </div>
             <div class="small text-muted mb-1">{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
             <div>{{ note.message }}</div>
-            {% if note.url %}<a class="small" href="{{ note.url }}">Open linked item</a>{% endif %}
+            {% if note.url|workplace_link %}<a class="small" href="{{ note.url|workplace_link }}">Open linked item</a>{% endif %}
           </div>
           <div class="d-flex gap-1">
             {% if not note.is_read %}

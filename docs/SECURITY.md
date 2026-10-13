@@ -23,7 +23,7 @@ The current local `.env` is intentionally preserved and may still contain expose
 ## Implemented controls
 
 - Required environment secret; no default account creation or startup DDL.
-- Werkzeug password hashing, 12–128 character password validation, explicit administrator/password/role CLI operations, and public registration restricted to new employee accounts.
+- Werkzeug password hashing, 12–128 character password validation, explicit administrator/password/role CLI operations, workplace registration restricted to employee accounts, and separate restricted owner registration.
 - Flask-WTF CSRF protection on browser forms and session-authenticated JSON POST requests. A JSON client uses the rendered `csrf-token` meta value in `X-CSRFToken`, as described in the [Flask-WTF documentation](https://flask-wtf.readthedocs.io/en/latest/csrf/).
 - POST-only logout, safe local redirects, bounded input sizes, finite decimal validation, department/reference checks, and generic conflict/server errors.
 - Ten login attempts per minute and ten registrations per hour per remote address. Local memory storage is for development; production requires shared storage. Reverse-proxy address handling must be configured for the actual trusted proxy topology before deployment.
@@ -35,6 +35,12 @@ The current local `.env` is intentionally preserved and may still contain expose
 - Spreadsheet formula neutralization in CSV text fields, export filename allowlists, authorized CSV/PDF access, and no arbitrary filesystem export paths.
 
 ## Limits and deployment prerequisites
+
+Store URLs dispatch to separate databases and Flask apps. Signing secrets derive from the protected hub secret and a random storage key; session/remember cookie names and paths differ per location. Ownership is checked before a CSRF-protected hub POST issues a store-owner session. A hub `owner` cannot read the legacy hub directory, conversations, APIs, payroll, or reports and can open only its own locations. Existing hub administrators/executives remain trusted platform operators.
+
+Staff join through a seven-day store-signed invitation tied to an active, unclaimed employee profile. A token from another location, tampered/expired token, archived profile, or already accepted invitation is rejected. Submitted role/name/email cannot replace that invited profile or grant elevated roles. Login/registration policies bind to a separate limiter per app, with store-specific storage prefixes. Rate limits remain address-based and require a correctly configured trusted proxy in production.
+
+Public store search reveals only business name, location, and sign-in URL. It never exposes staff or conversations. Store links and local sample names do not establish real brand ownership. Registration does not verify email or business ownership. Do not deploy open owner registration without the appropriate operational controls. Back up every store database with the hub; neither root accounts nor files should be public.
 
 The CSP permits inline scripts/styles used by the existing templates; extracting scripts and using nonces is planned. There is no MFA, SSO, email verification, email password recovery, external audit storage, or demonstrated legal payroll compliance. Management roles have organization-wide read access. The browser assistant is a deterministic navigation helper, not an AI service.
 

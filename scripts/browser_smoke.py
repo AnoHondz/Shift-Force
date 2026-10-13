@@ -19,6 +19,7 @@ from werkzeug.serving import make_server
 from app import create_app
 from app.extensions import db
 from app.models import Attendance, Employee, PayrollRecord, TeamChannel, User, utcnow
+from scripts.store_browser import verify_stores
 
 
 def main():
@@ -41,6 +42,7 @@ def main():
             REMEMBER_COOKIE_SAMESITE = "Lax"
             PUBLIC_REGISTRATION = True
             WORKFORCE_TIMEZONE = "America/New_York"
+            STORE_DATABASE_ROOT = str(Path(directory) / "stores")
 
         app = create_app(Config)
         with app.app_context():
@@ -465,6 +467,16 @@ def main():
                 completed.append(
                     "Mobile home, directory, payroll, schedule, chat and management: no page overflow"
                 )
+                verify_stores(
+                    page,
+                    browser,
+                    origin,
+                    app,
+                    completed,
+                    capture,
+                    browser_errors,
+                    buffer.getvalue(),
+                )
                 assert browser_errors == [], browser_errors
                 browser.close()
         finally:
@@ -473,6 +485,10 @@ def main():
             with app.app_context():
                 db.session.remove()
                 db.engine.dispose()
+            for child in app.extensions["stores"].apps.values():
+                with child.app_context():
+                    db.session.remove()
+                    db.engine.dispose()
         print(json.dumps({"completed": completed, "browser_errors": browser_errors}, indent=2))
 
 

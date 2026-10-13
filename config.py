@@ -27,5 +27,12 @@ class Config:
     REMEMBER_COOKIE_DURATION = timedelta(days=7)
     MAX_CONTENT_LENGTH = 6 * 1024 * 1024
     PUBLIC_REGISTRATION = APP_ENV != "production"
+    PUBLIC_STORE_OWNER_REGISTRATION = (
+        os.getenv(
+            "PUBLIC_STORE_OWNER_REGISTRATION", "true" if APP_ENV != "production" else "false"
+        ).lower()
+        == "true"
+    )
+    STORE_DATABASE_ROOT = os.getenv("STORE_DATABASE_ROOT")
     WORKFORCE_TIMEZONE = os.getenv("WORKFORCE_TIMEZONE", "UTC")
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")

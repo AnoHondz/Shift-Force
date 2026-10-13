@@ -6,8 +6,8 @@
     <div class="auth-brand-top">
       <div class="auth-logo-badge">S</div>
       <div>
-        <p class="auth-product mb-0">Shiftspace</p>
-        <p class="auth-mini mb-0">Your team's everyday space</p>
+        <p class="auth-product mb-0">{{ store_info.name if store_info else 'Shiftspace' }}</p>
+        <p class="auth-mini mb-0">{{ store_info.location if store_info else "Your team's everyday space" }}</p>
       </div>
     </div>
     <h1>Your shift. Your people. Your space.</h1>
@@ -25,13 +25,13 @@
   <section class="auth-card-premium" aria-live="polite">
     <div class="auth-tabs" role="tablist" aria-label="Authentication tabs">
       <a class="auth-tab {% if active_tab == 'signin' %}active{% endif %}" href="{{ url_for('auth.login') }}" role="tab" aria-selected="{{ 'true' if active_tab == 'signin' else 'false' }}">Sign In</a>
-      <a class="auth-tab {% if active_tab == 'signup' %}active{% endif %}" href="{{ url_for('auth.signup') }}" role="tab" aria-selected="{{ 'true' if active_tab == 'signup' else 'false' }}">Create Account</a>
+      {% if owner_signup or config.get('PUBLIC_REGISTRATION', True) or invite_token %}<a class="auth-tab {% if active_tab == 'signup' %}active{% endif %}" href="{{ url_for('auth.signup_owner') if owner_signup else url_for('auth.signup', invite=invite_token) }}" role="tab" aria-selected="{{ 'true' if active_tab == 'signup' else 'false' }}">{{ 'Owner account' if owner_signup else 'Create Account' }}</a>{% endif %}
     </div>
 
     <div class="auth-form-panel {% if active_tab == 'signin' %}active{% endif %}" id="signinPanel">
       <div class="mb-4">
-        <h2 class="h4 mb-1">Welcome back</h2>
-        <p class="text-muted mb-0">Sign in to your shift and your team.</p>
+        <h2 class="h4 mb-1">{{ store_info.name if store_info else 'Welcome back' }}</h2>
+        <p class="text-muted mb-0">{{ store_info.location if store_info else 'Sign in to your shift and your team.' }}</p>
       </div>
 
       {% if login_error %}
@@ -68,19 +68,21 @@
         <p id="remember-help" class="helper-copy mb-4">Stay signed in for 7 days. Signing out clears it.</p>
 
         <button type="submit" class="btn auth-cta w-100" id="loginSubmit">Sign In</button>
+        <div class="store-signin-links"><a href="{{ hub_url('/stores/find') }}">Find your store</a>{% if store_info %}<a href="{{ hub_url('/stores') }}">Store owner? My stores</a><p class="small text-muted mb-0">New here? Ask your manager for an invitation.</p>{% elif config.get('PUBLIC_STORE_OWNER_REGISTRATION', config.get('PUBLIC_REGISTRATION', True)) %}<a href="{{ url_for('auth.signup_owner') }}">Create an owner account</a>{% endif %}</div>
       </form>
     </div>
 
     <div class="auth-form-panel {% if active_tab == 'signup' %}active{% endif %}" id="signupPanel">
       <div class="mb-4">
-        <h2 class="h4 mb-1">Create your account</h2>
-        <p class="text-muted mb-0">Set up your workspace profile to start logging time and managing requests.</p>
+        <h2 class="h4 mb-1">{{ 'Create your owner account' if owner_signup else 'Create your account' }}</h2>
+        <p class="text-muted mb-0">{% if owner_signup %}Create your stores and manage each location in one place.{% elif invited_employee %}Join {{ store_info.name }} · {{ store_info.location }}.{% else %}Set up your workspace profile to start logging time and managing requests.{% endif %}</p>
       </div>
 
-      <form method="post" id="signupForm" action="{{ url_for('auth.signup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <form method="post" id="signupForm" action="{{ url_for('auth.signup_owner' if owner_signup else 'auth.signup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        {% if invite_token %}<input type="hidden" name="invite" value="{{ invite_token }}" />{% endif %}
         <div class="mb-3">
           <label class="form-label" for="signup_full_name">Full Name</label>
-          <input id="signup_full_name" name="full_name" type="text" class="form-control auth-input {% if signup_errors.get('full_name') %}is-invalid{% endif %}" value="{{ signup_values.get('full_name', '') }}" placeholder="Ava Thompson" required />
+          <input id="signup_full_name" name="full_name" type="text" class="form-control auth-input {% if signup_errors.get('full_name') %}is-invalid{% endif %}" value="{{ signup_values.get('full_name', '') }}" placeholder="Ava Thompson" required {% if invited_employee %}readonly{% endif %} />
           {% if signup_errors.get('full_name') %}<div class="invalid-feedback d-block">{{ signup_errors.get('full_name') }}</div>{% endif %}
         </div>
 
@@ -92,7 +94,7 @@
 
         <div class="mb-3">
           <label class="form-label" for="signup_email">Email</label>
-          <input id="signup_email" name="email" type="email" class="form-control auth-input {% if signup_errors.get('email') %}is-invalid{% endif %}" value="{{ signup_values.get('email', '') }}" placeholder="name@company.com" required />
+          <input id="signup_email" name="email" type="email" class="form-control auth-input {% if signup_errors.get('email') %}is-invalid{% endif %}" value="{{ signup_values.get('email', '') }}" placeholder="name@company.com" required {% if invited_employee %}readonly{% endif %} />
           {% if signup_errors.get('email') %}<div class="invalid-feedback d-block">{{ signup_errors.get('email') }}</div>{% endif %}
         </div>
 
@@ -114,7 +116,7 @@
           {% if signup_errors.get('confirm_password') %}<div class="invalid-feedback d-block">{{ signup_errors.get('confirm_password') }}</div>{% endif %}
         </div>
 
-        <div class="auth-note mb-4">New accounts are created with employee access. Elevated roles are assigned internally by administrators.</div>
+        <div class="auth-note mb-4">{% if owner_signup %}Your stores keep separate staff, schedules, and conversations.{% else %}New accounts are created with employee access. Elevated roles are assigned internally by administrators.{% endif %}</div>
         <button type="submit" class="btn auth-cta w-100" id="signupSubmit">Create Account</button>
       </form>
     </div>
