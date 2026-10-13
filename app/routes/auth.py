@@ -185,7 +185,7 @@ def login():
             db.session.commit()
         else:
             session.clear()
-            session.permanent = True
+            session.permanent = remember_me
             login_user(user, remember=remember_me)
             create_audit_log(
                 user, "login_success", "User", str(user.id), f"{user.username} logged in."
@@ -207,7 +207,8 @@ def logout():
         current_user, "logout", "User", str(current_user.id), f"{current_user.username} logged out."
     )
     db.session.commit()
-    logout_user()
     session.clear()
+    # Keep Flask-Login's remember-cookie deletion flag until after_request runs.
+    logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))

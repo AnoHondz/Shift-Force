@@ -19,6 +19,7 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Persistent chat channels with authenticated authors, CSRF-protected sending, escaped text, earlier-message loading, and automatic polling across signed-in coworker sessions. Administrators and executives can create channels.
 - Protected picture sharing with previews, validated/normalized uploads, stripped metadata, bounded dimensions/file sizes, and storage covered by SQLite backups.
 - Searchable emoji picker with categories, skin tones, keyboard navigation, and newer iPhone emoji; all 3,944 Unicode 17.0 fully qualified sequences are available.
+- Optional seven-day remembered sign-in on this device; signing out removes its cookie, while unchecked sign-in uses a browser session.
 - Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
@@ -176,6 +177,8 @@ python -m scripts.browser_smoke
 ```
 
 Tests use disposable databases and freshly generated credentials. The GitHub Actions workflow runs these checks on pushes and pull requests. Local verification results and scope are recorded in [verification notes](docs/VERIFICATION.md); a successful local run does not imply that GitHub CI or a production deployment has passed.
+
+On the sign-in page, select **Remember me on this device** to return without signing in again for up to seven days. Leave it unchecked for a browser session. **Sign out** removes the remembered sign-in from that browser. Session expiry still applies; the signed remember cookie restores access while it remains valid. Archived accounts cannot use it. Cookies are HttpOnly and SameSite=Lax, with Secure required in production. This behavior uses [Flask-Login's remember-cookie support](https://flask-login.readthedocs.io/en/latest/#remember-me).
 
 ## Screenshots
 

@@ -1,12 +1,12 @@
 # Verification record
 
-Local verification, including the emoji-picker follow-up, was completed on October 13, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0004_channels` with writers stopped. Its existing records and account passwords were preserved. The original `employee_mgmt.db` remained unchanged.
+Local verification, including the emoji-picker and remembered-sign-in follow-ups, was completed on October 13, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0004_channels` with writers stopped. Its existing records and account passwords were preserved. The original `employee_mgmt.db` remained unchanged.
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **156 passed, 0 failed**, 139.99 seconds after the searchable emoji-picker update |
+| `python -m pytest -q` | **162 passed, 0 failed**, 102.88 seconds after the remembered-sign-in update; four dependency deprecation warnings from Flask-Login cookie expiry |
 | Ruff lint | All checks passed |
-| Ruff formatting | 50 Python files passed the format check |
+| Ruff formatting | 45 Python files passed the scoped format check |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | 27 resolved runtime packages, 0 known vulnerabilities at the time of the audit |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -14,7 +14,7 @@ Local verification, including the emoji-picker follow-up, was completed on Octob
 | Historical exposure review | Five original commits contain sensitive environment/database artifacts; history is unchanged |
 | Documented fresh setup | Environment generation, migrations, demo seeding, localhost startup, and HTTP 200 login page passed in a clean temporary directory |
 | Disposable original-database migration | All original values and rows in eight tables preserved; foreign-key check passed; original file hash unchanged |
-| Chromium browser verification | Fourteen workflow checks passed, 0 browser errors; 24 real screenshots captured |
+| Chromium browser verification | Fifteen workflow checks passed, 0 browser errors; 24 real screenshots retained, with the sign-in screenshot refreshed for remembered sign-in |
 | Existing synthetic demo upgrade | Verified backup, successful copy-first migration, all preexisting column values/rows retained, integrity checks passed, and same accounts verified after restart |
 
 The browser script exercised employee login with CSRF, dashboard clock-in/out for both employee and administrator accounts, persisted shift status after reload, attendance history, leave submission, POST logout, administrator login, employee creation/search/edit/profile, cross-day overtime and payroll approval, leave approval, inbox/audit pages, and CSV/PDF downloads. New workflows enter Manage workplace, add a missed shift, correct it with an audit reason, publish a dated schedule, verify employee visibility, and exchange chat replies across separate signed-in browser sessions with automatic polling. Mobile home, directory, payroll, schedule, chat, and management were checked for page overflow. Screenshots use synthetic records only.
@@ -30,6 +30,8 @@ Fifteen channel/picture regressions verify administrator/executive channel creat
 The browser also creates #shift-swaps through the admin UI, switches another account into it, previews and shares a picture, verifies the coworker receives and decodes it through polling, reloads to confirm persistence, and verifies the new conversation is absent from #general. Desktop chat fits the viewport; mobile checks cover the channel layout. Real screenshots show the charcoal theme, Shiftspace branding, and simplified Today screen.
 
 The emoji follow-up replaces single-smile insertion with a locally served catalog of all 3,944 fully qualified Unicode 17.0 sequences, category/search controls, skin tones (including all mixed-tone variations), and native device rendering. Chromium verified caret-preserving insertion, selected skin tones, newer iPhone emoji search, cross-account delivery and persistence, Enter/arrow/Escape behavior, the 2,000-character composer limit, and mobile width. The existing running demo was restarted without reseeding or migration and independently checked for picker loading, newer-emoji search, and draft insertion without sending a message or changing records. Apple fonts and artwork are not bundled; glyph appearance and support depend on the user's installed OS. The source and license are linked in the README.
+
+Six remembered-sign-in regressions verify seven-day cookie expiry and HttpOnly/SameSite protections, browser-session behavior when unchecked, restoration without the session cookie, sign-out deletion, failed sign-in, tampered cookies, archived accounts, and Secure cookies over HTTPS. Chromium additionally restores access in a separate browser context using only the remember cookie, then verifies sign-out blocks access and unchecked sign-in has no persistent session expiry. The local running demo independently passed the same restoration/sign-out checks and mobile layout review without changing workforce records.
 
 ## Scope and limits
 

@@ -8,6 +8,7 @@ import threading
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from time import time
 from zoneinfo import ZoneInfo
 
 from flask_migrate import upgrade
@@ -36,6 +37,8 @@ def main():
             SQLALCHEMY_DATABASE_URI = f"sqlite:///{Path(directory).as_posix()}/browser.db"
             RATELIMIT_ENABLED = False
             PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+            REMEMBER_COOKIE_DURATION = timedelta(days=7)
+            REMEMBER_COOKIE_SAMESITE = "Lax"
             PUBLIC_REGISTRATION = True
             WORKFORCE_TIMEZONE = "America/New_York"
 
@@ -78,10 +81,26 @@ def main():
                 capture(page, "login")
                 page.get_by_label("Email or Username").fill("demo.employee")
                 page.get_by_label("Password", exact=True).first.fill(credentials["demo.employee"])
+                page.get_by_label("Remember me on this device", exact=True).check()
                 page.get_by_role("button", name="Sign In", exact=True).click()
                 expect(page).to_have_url(origin + "/employee/dashboard")
                 capture(page, "employee-workspace")
                 completed.append("Employee sign-in with CSRF")
+                remembered = [
+                    cookie
+                    for cookie in page.context.cookies()
+                    if cookie["name"] == "remember_token"
+                ]
+                assert len(remembered) == 1
+                assert remembered[0]["httpOnly"] and remembered[0]["sameSite"] == "Lax"
+                assert 604790 < remembered[0]["expires"] - time() <= 604800
+                resumed_context = browser.new_context()
+                resumed_context.add_cookies(remembered)
+                resumed = resumed_context.new_page()
+                resumed.on("pageerror", lambda error: browser_errors.append(str(error)))
+                assert resumed.goto(origin + "/employee/dashboard").status == 200
+                expect(resumed.get_by_role("region", name="Your shift")).to_be_visible()
+                resumed_context.close()
 
                 page.get_by_role("region", name="Your shift").get_by_role(
                     "button", name="Clock in", exact=True
@@ -112,10 +131,31 @@ def main():
 
                 page.get_by_role("button", name="Sign out", exact=True).click()
                 expect(page).to_have_url(origin + "/login")
+                assert not any(
+                    cookie["name"] == "remember_token" for cookie in page.context.cookies()
+                )
+                page.goto(origin + "/employee/dashboard")
+                expect(page).to_have_url(origin + "/login?next=/employee/dashboard?")
+                expect(
+                    page.get_by_label("Remember me on this device", exact=True)
+                ).not_to_be_checked()
+                completed.append(
+                    "Seven-day remembered sign-in restores a new browser session; sign-out clears it"
+                )
+                page.goto(origin + "/login")
                 page.get_by_label("Email or Username").fill("demo.admin")
                 page.get_by_label("Password", exact=True).first.fill(credentials["demo.admin"])
                 page.get_by_role("button", name="Sign In", exact=True).click()
                 expect(page).to_have_url(origin + "/dashboard")
+                assert not any(
+                    cookie["name"] == "remember_token" for cookie in page.context.cookies()
+                )
+                assert (
+                    next(
+                        cookie for cookie in page.context.cookies() if cookie["name"] == "session"
+                    )["expires"]
+                    == -1
+                )
                 capture(page, "dashboard")
                 page.get_by_role("region", name="Your shift").get_by_role(
                     "button", name="Clock in", exact=True

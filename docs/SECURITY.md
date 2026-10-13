@@ -28,6 +28,7 @@ The current local `.env` is intentionally preserved and may still contain expose
 - POST-only logout, safe local redirects, bounded input sizes, finite decimal validation, department/reference checks, and generic conflict/server errors.
 - Ten login attempts per minute and ten registrations per hour per remote address. Local memory storage is for development; production requires shared storage. Reverse-proxy address handling must be configured for the actual trusted proxy topology before deployment.
 - HttpOnly/SameSite session and remember cookies; secure cookies, HSTS, and debug-disabled validation in production.
+- Remembered sign-in is opt-in for seven days. Unchecked sign-in uses a browser-session cookie; POST sign-out removes the remember cookie as well as authentication state. Cookie restoration still passes the active-account check. Password resets require the documented secret rotation to invalidate existing signed cookies.
 - Route-level roles, employee ownership checks, private inbox reads/mutations, archived-account denial, and payroll/leave self-review denial.
 - SQLite foreign keys, daily payroll uniqueness, active-shift uniqueness, leave overlap triggers, and optimistic payroll/leave versions to reject stale writes.
 - Escaped Jinja output, local frontend assets, frame denial, MIME-sniffing protection, no-store authenticated responses, and a CSP restricting external resources and form destinations.
