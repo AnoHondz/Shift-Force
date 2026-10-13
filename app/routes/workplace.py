@@ -1,7 +1,7 @@
 """Everyday workspace and manager tools, with shared persistent coworker chat."""
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
@@ -19,6 +19,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 from sqlalchemy import or_
+from werkzeug.exceptions import HTTPException
 
 from ..chat_images import normalize_picture
 from ..extensions import db, limiter
@@ -26,12 +27,22 @@ from ..models import (
     Attendance,
     ChatAttachment,
     Employee,
+    LeaveRequest,
     Role,
     ScheduledShift,
     TeamChannel,
     TeamMessage,
     create_audit_log,
     utcnow,
+)
+from ..scheduling import (
+    day_boundary,
+    local_datetime,
+    monday,
+    repeat_intervals,
+    selected_week,
+    validate_availability,
+    week_calendar,
 )
 from ..utils import get_current_employee
 
@@ -89,11 +100,10 @@ def employees():
 
 
 def selected_employee():
-    try:
-        employee_id = int(request.form.get("employee_id", ""))
-    except ValueError:
+    value = request.form.get("employee_id", "")
+    if not value.isascii() or not value.isdigit() or len(value) > 18 or int(value) < 1:
         abort(400, description="Choose an employee.")
-    employee = db.get_or_404(Employee, employee_id)
+    employee = db.get_or_404(Employee, int(value))
     if employee.archived:
         abort(400, description="Choose an active employee.")
     return employee
@@ -150,109 +160,204 @@ def manage():
     return render_template("manage.html", active_page="manage", page_title="Manage workplace")
 
 
+def schedule_staff_id():
+    staff_id = None
+    if current_user.has_admin_access() and request.values.get("staff"):
+        value = request.values["staff"]
+        if not value.isascii() or not value.isdigit() or len(value) > 18:
+            abort(400, description="Choose a valid employee filter.")
+        staff_id = int(value)
+        db.get_or_404(Employee, staff_id)
+    return staff_id
+
+
+def schedule_context(week, editing=None, error=None):
+    zone = workplace_zone()
+    today = local_datetime(utcnow(), zone).date()
+    staff = employees() if current_user.has_admin_access() else []
+    staff_id = schedule_staff_id()
+    first, last = day_boundary(week, zone), day_boundary(week + timedelta(days=7), zone)
+    shifts_query = ScheduledShift.query.filter(
+        ScheduledShift.ends_at > first,
+        ScheduledShift.starts_at < last,
+        ScheduledShift.cancelled.is_(False),
+    )
+    leaves_query = LeaveRequest.query.filter(
+        LeaveRequest.status == "Approved",
+        LeaveRequest.start_date <= week + timedelta(days=6),
+        LeaveRequest.end_date >= week,
+    )
+    visible_employee = staff_id if current_user.has_admin_access() else current_user.employee_id
+    if visible_employee is not None:
+        shifts_query = shifts_query.filter_by(employee_id=visible_employee)
+        leaves_query = leaves_query.filter_by(employee_id=visible_employee)
+    elif not current_user.has_admin_access():
+        # An unlinked account must never inherit the full workplace view.
+        shifts_query = shifts_query.filter_by(employee_id=-1)
+        leaves_query = leaves_query.filter_by(employee_id=-1)
+    shifts = shifts_query.order_by(ScheduledShift.starts_at, ScheduledShift.id).all()
+    leaves = leaves_query.order_by(LeaveRequest.employee_id, LeaveRequest.start_date).all()
+    calendar, hours = week_calendar(shifts, leaves, week, today, zone)
+    default_day = today if week <= today < week + timedelta(days=7) else week
+    if request.args.get("on"):
+        try:
+            chosen_week = selected_week(request.args["on"], None, today)
+            if chosen_week != week:
+                raise ValueError("Choose a day in the displayed week.")
+            default_day = date.fromisoformat(request.args["on"])
+        except ValueError as exc:
+            abort(400, description=str(exc))
+    values = dict(
+        employee_id=str(editing.employee_id) if editing else str(staff_id or ""),
+        starts_at=local_input(editing.starts_at) if editing else default_day.isoformat() + "T09:00",
+        ends_at=local_input(editing.ends_at) if editing else default_day.isoformat() + "T17:00",
+        notes=editing.notes if editing else "",
+        version_id=str(editing.version_id) if editing else "",
+    )
+    if request.method == "POST":
+        values.update({key: request.form.get(key, "") for key in values})
+    return dict(
+        active_page="schedule",
+        page_title="Schedule",
+        week=week,
+        previous_week=week - timedelta(days=7),
+        next_week=week + timedelta(days=7),
+        days=(week - monday(today)).days,
+        calendar=calendar,
+        shift_count=len(shifts),
+        total_hours=hours,
+        employees=staff,
+        staff_id=staff_id,
+        editing=editing,
+        timezone_name=str(zone),
+        form_values=values,
+        form_error=error,
+        repeat_days=request.form.getlist("repeat_days") if request.method == "POST" else [],
+    )
+
+
 @workplace_bp.route("/schedule", methods=("GET", "POST"))
 @login_required
 def schedule():
     if request.method == "POST":
         require_manager(write=True)
-        employee = selected_employee()
-        record_id = request.form.get("shift_id")
-        record = db.get_or_404(ScheduledShift, record_id) if record_id else None
-        if record:
-            verify_version(record)
-            if record.cancelled:
-                abort(400, description="This shift has already been cancelled.")
+    try:
+        week = selected_week(
+            request.values.get("week"),
+            request.args.get("days"),
+            local_datetime(utcnow(), workplace_zone()).date(),
+        )
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    record = None
+    if request.method == "POST":
         try:
+            record_id = request.form.get("shift_id")
+            record = db.get_or_404(ScheduledShift, record_id) if record_id else None
+            if record:
+                verify_version(record)
+                if record.cancelled:
+                    raise ValueError(
+                        "This shift was cancelled. Refresh the schedule before editing."
+                    )
+            employee = selected_employee()
             start = parse_shift_time(request.form.get("starts_at"))
             end = parse_shift_time(request.form.get("ends_at"))
             validate_interval(start, end)
             notes = request.form.get("notes", "").strip()
             if len(notes) > 255:
                 raise ValueError("Shift notes must be at most 255 characters.")
-            overlap = ScheduledShift.query.filter(
-                ScheduledShift.employee_id == employee.id,
-                ScheduledShift.cancelled.is_(False),
-                ScheduledShift.starts_at < end,
-                ScheduledShift.ends_at > start,
+            intervals = repeat_intervals(
+                start,
+                end,
+                request.form.getlist("repeat_days"),
+                workplace_zone(),
+                parse_shift_time,
+                editing=record is not None,
             )
-            if record:
-                overlap = overlap.filter(ScheduledShift.id != record.id)
-            if overlap.first():
-                raise ValueError("This employee already has a shift during those hours.")
-        except ValueError as exc:
-            abort(400, description=str(exc))
+            for index, (shift_start, shift_end) in enumerate(intervals):
+                validate_interval(shift_start, shift_end)
+                selected_week(
+                    local_datetime(shift_start, workplace_zone()).date().isoformat(),
+                    None,
+                    local_datetime(utcnow(), workplace_zone()).date(),
+                )
+                if index and intervals[index - 1][1] > shift_start:
+                    raise ValueError(
+                        "These repeated shifts overlap each other. Choose shorter hours."
+                    )
+                validate_availability(
+                    employee.id,
+                    shift_start,
+                    shift_end,
+                    workplace_zone(),
+                    exclude_id=record.id if record else None,
+                )
+        except (ValueError, OverflowError, HTTPException) as exc:
+            if isinstance(exc, HTTPException):
+                if exc.code not in {400, 409}:
+                    raise
+                status, message = exc.code, exc.description
+            else:
+                status = 400
+                message = (
+                    "Choose valid shift dates." if isinstance(exc, OverflowError) else str(exc)
+                )
+            return render_template(
+                "schedule.html", **schedule_context(week, record, message)
+            ), status
         before = (
             f"{record.employee_id}: {record.starts_at} to {record.ends_at}; {record.notes}"
             if record
             else "No shift"
         )
-        action = "schedule_updated" if record else "schedule_created"
-        if not record:
-            record = ScheduledShift()
-            db.session.add(record)
-        record.employee_id, record.starts_at, record.ends_at, record.notes = (
-            employee.id,
-            start,
-            end,
-            notes,
-        )
-        db.session.flush()
-        create_audit_log(
-            current_user,
-            action,
-            "ScheduledShift",
-            str(record.id),
-            f"Before: {before}. After: {employee.id}: {start} to {end}; {notes} (UTC).",
-        )
+        for shift_start, shift_end in intervals:
+            action = "schedule_updated" if record else "schedule_created"
+            shift = record or ScheduledShift()
+            if record is None:
+                db.session.add(shift)
+            shift.employee_id, shift.starts_at, shift.ends_at, shift.notes = (
+                employee.id,
+                shift_start,
+                shift_end,
+                notes,
+            )
+            db.session.flush()
+            create_audit_log(
+                current_user,
+                action,
+                "ScheduledShift",
+                str(shift.id),
+                f"Before: {before}. After: {employee.id}: {shift_start} to {shift_end}; {notes} (UTC).",
+            )
         db.session.commit()
-        flash("Schedule saved.", "success")
-        return redirect(url_for("workplace.schedule"))
-    now = utcnow()
-    start_local = (
-        now.replace(tzinfo=timezone.utc)
-        .astimezone(workplace_zone())
-        .replace(hour=0, minute=0, second=0, microsecond=0)
-    )
-    try:
-        days = int(request.args.get("days", 0))
-        if abs(days) > 3650:
-            raise ValueError
-    except ValueError:
-        abort(400, description="Choose a valid schedule week.")
-    start_local += timedelta(days=days - start_local.weekday())
-    start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    end = (start_local + timedelta(days=7)).astimezone(timezone.utc).replace(tzinfo=None)
-    query = ScheduledShift.query.filter(
-        ScheduledShift.ends_at > start,
-        ScheduledShift.starts_at < end,
-        ScheduledShift.cancelled.is_(False),
-    )
-    if not current_user.has_admin_access():
-        query = query.filter_by(employee_id=current_user.employee_id)
-    editing = None
+        flash(
+            "Schedule saved." if len(intervals) == 1 else f"{len(intervals)} shifts saved.",
+            "success",
+        )
+        saved_week = monday(local_datetime(start, workplace_zone()).date())
+        return redirect(url_for("workplace.schedule", week=saved_week.isoformat()))
     if request.args.get("edit"):
         require_manager(write=True)
-        editing = db.get_or_404(ScheduledShift, request.args["edit"])
-        if editing.cancelled:
+        record = db.get_or_404(ScheduledShift, request.args["edit"])
+        if record.cancelled:
             abort(404)
-    return render_template(
-        "schedule.html",
-        active_page="schedule",
-        page_title="Schedule",
-        shifts=query.order_by(ScheduledShift.starts_at).limit(500).all(),
-        employees=employees() if current_user.role in Role.LEAVE_REVIEW else [],
-        editing=editing,
-        local_input=local_input,
-        timezone_name=str(workplace_zone()),
-        week=start_local.date(),
-        days=days,
-    )
+    return render_template("schedule.html", **schedule_context(week, record))
 
 
 @workplace_bp.post("/schedule/<int:shift_id>/cancel")
 @login_required
 def cancel_shift(shift_id):
     require_manager(write=True)
+    staff_id = schedule_staff_id()
+    try:
+        week = selected_week(
+            request.form.get("week"),
+            request.args.get("days"),
+            local_datetime(utcnow(), workplace_zone()).date(),
+        )
+    except ValueError as exc:
+        abort(400, description=str(exc))
     record = db.get_or_404(ScheduledShift, shift_id)
     verify_version(record)
     if record.cancelled:
@@ -267,7 +372,7 @@ def cancel_shift(shift_id):
     )
     db.session.commit()
     flash("Shift cancelled.", "success")
-    return redirect(url_for("workplace.schedule"))
+    return redirect(url_for("workplace.schedule", week=week.isoformat(), staff=staff_id))
 
 
 @workplace_bp.route("/manage/punches", methods=("GET", "POST"))

@@ -1,12 +1,12 @@
 # Verification record
 
-Local verification, including store workspaces, the emoji picker, and remembered sign-in, was completed on October 13, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0005_stores` with writers stopped. Its existing records and account passwords were preserved. The original `employee_mgmt.db` remained unchanged.
+Local verification, including the weekly schedule builder, store workspaces, the emoji picker, and remembered sign-in, was completed on October 13, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0005_stores` with writers stopped. Its existing records and account passwords were preserved. The scheduling update required no schema migration. Data fingerprints verified unchanged values in all tables across the hub and two store databases during the restart. The original `employee_mgmt.db` remained unchanged.
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **191 passed, 0 failed**, 78.30 seconds after the store update; five dependency deprecation warnings from Flask-Login cookie expiry |
+| `python -m pytest -q` | **221 passed, 0 failed**, 99.48 seconds after the schedule-builder update; five dependency deprecation warnings from Flask-Login cookie expiry |
 | Ruff lint | All checks passed |
-| Ruff formatting | 50 Python files passed the scoped format check |
+| Ruff formatting | 53 Python files passed the scoped format check |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | 27 resolved runtime packages, 0 known vulnerabilities at the time of the audit |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -14,7 +14,7 @@ Local verification, including store workspaces, the emoji picker, and remembered
 | Historical exposure review | Five original commits contain sensitive environment/database artifacts; history is unchanged |
 | Documented fresh setup | Environment generation, migrations, demo seeding, localhost startup, and HTTP 200 login page passed in a clean temporary directory |
 | Disposable original-database migration | All original values and rows in eight tables preserved; foreign-key check passed; original file hash unchanged |
-| Chromium browser verification | Nineteen workflow checks passed, 0 browser errors; 29 real screenshots retained, including store search, location sign-in, owner desktop/mobile views, and store chat |
+| Chromium browser verification | Twenty-three workflow checks passed, 0 unexpected browser errors; 32 real screenshots retained, including the weekly schedule builder, conflict feedback, mobile form, store lookup/sign-in, owner views, and store chat |
 | Existing synthetic demo upgrade | Verified backup, successful copy-first migration, all preexisting column values/rows retained, integrity checks passed, and same accounts verified after restart |
 
 The browser script exercised employee login with CSRF, dashboard clock-in/out for both employee and administrator accounts, persisted shift status after reload, attendance history, leave submission, POST logout, administrator login, employee creation/search/edit/profile, cross-day overtime and payroll approval, leave approval, inbox/audit pages, and CSV/PDF downloads. New workflows enter Manage workplace, add a missed shift, correct it with an audit reason, publish a dated schedule, verify employee visibility, and exchange chat replies across separate signed-in browser sessions with automatic polling. Mobile home, directory, payroll, schedule, chat, and management were checked for page overflow. Screenshots use synthetic records only.
@@ -34,6 +34,10 @@ The emoji follow-up replaces single-smile insertion with a locally served catalo
 Six remembered-sign-in regressions verify seven-day cookie expiry and HttpOnly/SameSite protections, browser-session behavior when unchecked, restoration without the session cookie, sign-out deletion, failed sign-in, tampered cookies, archived accounts, and Secure cookies over HTTPS. Chromium additionally restores access in a separate browser context using only the remember cookie, then verifies sign-out blocks access and unchecked sign-in has no persistent session expiry. The local running demo independently passed the same restoration/sign-out checks and mobile layout review without changing workforce records.
 
 ## Scope and limits
+
+Twenty-nine scheduling regressions cover atomic repeated groups with per-shift audits, rollback on database conflicts, weekday validation, approved versus pending/rejected leave, overnight leave boundaries, day/week hour allocation, local hours across clock changes, refusal of invalid repeated clock-change times, no repetition during editing, stale forms, retained edit identity after invalid employee selection, cancellation history/week/filter retention, personal visibility including unlinked accounts, later-approved time-off flags, bounded planning dates and IDs, adjacent shifts, quick-day defaults, and complete display of 501 shifts. An additional store regression verifies repeating and calendar access cannot affect the other location's database.
+
+Four new Chromium workflows exercise the actual day links, repeated-day checkboxes, employee filter, planned totals, edits, dismissed/accepted cancellation dialogs, and preserved selected week. Two deliberately conflicting POST submissions returned the expected 400 responses and retained their drafts; unexpected HTTP errors and JavaScript failures still fail verification. The preview displayed nine actual hours over the autumn clock change and one over the spring change, and invalid local clock-change times were blocked. Mobile builder width and personal schedule isolation passed. The running demo separately passed manager access, repeat preview, mobile width, and store-scoped calendar/asset checks without submitting shifts; normal sign-in/owner-entry audit events were the only writes during that review.
 
 Twenty-eight store regressions verify separate records, keys/cookies, remembered sessions, owner switching and ownership denial, employee permissions, public search boundaries, prefixed links/assets, invalid store codes/time zones, duplicate-code preservation, scoped CSRF, signed invitations with tamper/expiry/archive/replay rejection, forced employee identity/role, restricted owner signup, per-store login throttles, fail-closed missing storage, and read-only startup. Another migration regression verifies `0004_channels` accounts/password hashes and notification references survive `0005_stores`, which accepts the restricted owner role.
 

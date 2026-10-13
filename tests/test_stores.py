@@ -424,3 +424,31 @@ def test_store_login_limits_are_separate(app, client, locations):
         assert client.post(a, data={"username": "missing"}).status_code == 200
     assert client.post(a, data={"username": "missing"}).status_code == 429
     assert client.post(b, data={"username": "missing"}).status_code == 200
+
+
+def test_schedule_builder_cannot_read_or_modify_other_location(client, locations):
+    from app.models import ScheduledShift
+
+    broad, cox = locations
+    add_staff(broad, "Broad Coworker", "crew")
+    add_staff(cox, "Cox Coworker", "crew")
+    client.post("/stores/mcdonalds-broad-street/open")
+    response = client.post(
+        "/s/mcdonalds-broad-street/schedule",
+        data={
+            "employee_id": "2",
+            "starts_at": "2026-10-19T09:00",
+            "ends_at": "2026-10-19T17:00",
+            "repeat_days": ["2"],
+            "notes": "Broad-only planned coverage",
+        },
+    )
+    assert response.status_code == 302
+    assert response.location.startswith("/s/mcdonalds-broad-street/schedule?week=")
+    client.post("/stores/mcdonalds-cox-street/open")
+    page = client.get("/s/mcdonalds-cox-street/schedule?week=2026-10-19")
+    assert b"Broad-only planned coverage" not in page.data and b"Broad Coworker" not in page.data
+    with broad.app_context():
+        assert ScheduledShift.query.count() == 2
+    with cox.app_context():
+        assert ScheduledShift.query.count() == 0

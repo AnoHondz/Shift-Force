@@ -19,6 +19,7 @@ from werkzeug.serving import make_server
 from app import create_app
 from app.extensions import db
 from app.models import Attendance, Employee, PayrollRecord, TeamChannel, User, utcnow
+from scripts.schedule_browser import verify_schedule_builder
 from scripts.store_browser import verify_stores
 
 
@@ -466,6 +467,9 @@ def main():
                         ).click()
                 completed.append(
                     "Mobile home, directory, payroll, schedule, chat and management: no page overflow"
+                )
+                verify_schedule_builder(
+                    page, browser, origin, app, credentials, completed, capture, browser_errors
                 )
                 verify_stores(
                     page,

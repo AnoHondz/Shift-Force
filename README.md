@@ -22,7 +22,8 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Optional seven-day remembered sign-in on this device; signing out removes its cookie, while unchecked sign-in uses a browser session.
 - Separate store workspaces with location sign-in links, private staff/schedules/chats/pictures, and an owner account that can switch across its locations.
 - Simple store search by business or street and manager-generated, seven-day invitations for staff to join the correct location.
-- Dated schedules with overnight shifts, editing, cancellation that retains history, and employee visibility limited to their own shifts.
+- Weekly schedule builder with day cards, staff filtering, daily/week hour totals, quick day selection, repeated shifts saved as one group, overnight visibility, and a live duration preview using the store's time zone.
+- Approved-time-off and overlapping-shift checks, preserved invalid drafts, versioned edits, confirmed cancellation that retains history, and employee visibility limited to their own shifts.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
 - Employee invitations, restricted owner registration, hashed passwords, CSRF-protected sessions, per-location login throttling, and explicit CLI administration.
@@ -105,7 +106,11 @@ After signing in, **Today** shows your own Clock in / Clock out button and upcom
 
 Open **Manage workplace → Punches** to select **Correct**, fix times, enter a reason, and save. **Add missed punches** creates a shift that was never clocked. Clock out may be left blank for someone still working. Corrected punches retain their record ID and an audit of old/new values; review any affected payroll entry separately.
 
-Open **Manage workplace → Schedule → Add a shift** to choose an employee, dates/times, and optional notes. Existing shifts have Edit and Cancel shift controls. Cancellation retains the stored shift and audit history. Times use `WORKFORCE_TIMEZONE`; ambiguous or nonexistent clock-change times are rejected.
+Open **Manage workplace → Schedule** for a Monday–Sunday board. Filter by employee or view the full team; daily and weekly totals count only hours inside the displayed dates. Overnight shifts appear on both dates with continuation labels. On mobile, the board becomes a day agenda.
+
+Choose **Add shift** on a day or **Add a shift**, select an employee, enter start/end dates and optional notes, and review the duration preview. **Repeat this shift** adds the same local hours to selected days in the start date's week, including the original date. The whole group saves only if every shift passes validation. Existing shifts have Edit and Cancel shift controls; cancellation asks for confirmation and retains history. Saved shifts are visible to staff immediately; there is no draft/publish stage.
+
+Approved time off blocks new or changed shifts touching that local date; a shift ending exactly at midnight does not occupy the next day. If time off is approved after a shift was posted, the board flags it for review while retaining the shift. Invalid submissions keep the entered values and edit identity. Overlap checks and database triggers, version guards, and a ten-year planning range protect changes. Times use the selected store's zone; ambiguous or nonexistent clock-change inputs are rejected, and repeated shifts preserve wall-clock hours while actual duration can change with daylight saving. Planned hours do not create payroll or punches.
 
 **Team chat** opens a channel list, conversation, and coworker list in a Discord-style layout. Administrators and executives use **Create channel** to add separate conversations. All channels are visible to active employee-linked accounts in this installation; channels are not private membership groups. Existing conversations remain in **#general**. Messages persist, update about every eight seconds while the page is visible, and support loading earlier messages. Enter sends; Shift+Enter adds a line break.
 
