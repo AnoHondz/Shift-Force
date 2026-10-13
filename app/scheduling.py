@@ -36,6 +36,51 @@ def day_boundary(day, zone):
     return datetime.combine(day, time.min, zone).astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def simple_intervals(week, values, parse_time, editing=False, original=None):
+    """Build explicit selected days using local clock times, including overnight shifts."""
+    start_time, end_time = values.get("start_time", ""), values.get("end_time", "")
+    if any(not re.fullmatch(r"[0-9]{2}:[0-9]{2}", value) for value in (start_time, end_time)):
+        raise ValueError("Choose a start time and an end time.")
+    start_clock, end_clock = time.fromisoformat(start_time), time.fromisoformat(end_time)
+    keep_overnight = bool(
+        editing
+        and original
+        and original[1][:10] > original[0][:10]
+        and start_time == original[0][11:16]
+        and end_time == original[1][11:16]
+    )
+    if start_clock == end_clock and not keep_overnight:
+        raise ValueError("Choose different start and end times.")
+    if values.getlist("repeat_days"):
+        raise ValueError("Choose days using the day buttons.")
+    selected = values.getlist("shift_days")
+    if editing:
+        if selected:
+            raise ValueError("Edit one shift at a time.")
+        day = values.get("shift_date", "")
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
+            raise ValueError("Choose a valid shift date.")
+        dates = [date.fromisoformat(day)]
+    else:
+        if (
+            not selected
+            or len(selected) > 7
+            or any(value not in "0123456" or len(value) != 1 for value in selected)
+        ):
+            raise ValueError("Choose at least one day from this week.")
+        dates = [week + timedelta(days=offset) for offset in sorted({int(v) for v in selected})]
+    intervals = []
+    for day in dates:
+        end_day = day + timedelta(days=1) if end_clock < start_clock or keep_overnight else day
+        intervals.append(
+            (
+                parse_time(datetime.combine(day, start_clock).isoformat()),
+                parse_time(datetime.combine(end_day, end_clock).isoformat()),
+            )
+        )
+    return intervals
+
+
 def repeat_intervals(start, end, values, zone, parse_time, editing=False):
     if not values:
         return [(start, end)]

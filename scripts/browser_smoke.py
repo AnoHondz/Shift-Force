@@ -209,14 +209,16 @@ def main():
                     assert db.session.get(Attendance, missed_id).hours_worked == 8
                 completed.append("Management entry, missed punches and audited correction")
 
-                page.goto(origin + "/schedule")
-                page.get_by_text("Add a shift", exact=True).click()
                 tomorrow = yesterday + timedelta(days=2)
+                schedule_week = tomorrow.date() - timedelta(days=tomorrow.weekday())
+                page.goto(origin + "/schedule?week=" + schedule_week.isoformat())
+                page.locator(f'[data-schedule-day="{tomorrow.date().isoformat()}"]').click()
                 page.get_by_label("Employee", exact=True).select_option(str(employee_id))
-                page.get_by_label("Start", exact=True).fill(tomorrow.strftime("%Y-%m-%dT%H:%M"))
-                page.get_by_label("End", exact=True).fill(
-                    (tomorrow + timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M")
+                page.get_by_label("Start time", exact=True).fill(tomorrow.strftime("%H:%M"))
+                page.get_by_label("End time", exact=True).fill(
+                    (tomorrow + timedelta(hours=8)).strftime("%H:%M")
                 )
+                page.get_by_text("Add a note", exact=True).click()
                 page.get_by_label("Notes (optional)").fill("Front desk coverage")
                 page.get_by_role("button", name="Save shift").click()
                 expect(page.get_by_text("Schedule saved.", exact=True)).to_be_visible()

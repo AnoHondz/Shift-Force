@@ -30,6 +30,156 @@ def totals(response):
     return re.search(rb'id="schedule-totals">(.*?)</p>', response.data).group(1)
 
 
+def simple_data(users, **changes):
+    values = dict(
+        employee_id=users["employee_profile_id"],
+        week=WEEK.isoformat(),
+        simple_schedule="1",
+        shift_days=["0"],
+        start_time="09:00",
+        end_time="17:00",
+        notes="",
+    )
+    values.update(changes)
+    return values
+
+
+def test_simple_days_save_exact_selection_without_javascript(client, app, users):
+    sign_in(client)
+    response = client.post("/schedule", data=simple_data(users, shift_days=["2", "4"]))
+    assert response.status_code == 302
+    with app.app_context():
+        shifts = ScheduledShift.query.order_by(ScheduledShift.starts_at).all()
+        assert [shift.starts_at.day for shift in shifts] == [21, 23]
+        assert all(shift.ends_at - shift.starts_at == timedelta(hours=8) for shift in shifts)
+        assert AuditLog.query.filter_by(action_type="schedule_created").count() == 2
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        dict(shift_days=[]),
+        dict(shift_days=["7"]),
+        dict(shift_days=["0"] * 8),
+        dict(shift_days=["00"]),
+        dict(start_time="25:00"),
+        dict(end_time="17:00:00"),
+        dict(end_time="09:00"),
+        dict(repeat_days=["2"]),
+    ],
+)
+def test_simple_invalid_selection_never_writes(client, app, users, changes):
+    sign_in(client)
+    assert client.post("/schedule", data=simple_data(users, **changes)).status_code == 400
+    with app.app_context():
+        assert ScheduledShift.query.count() == 0
+        assert AuditLog.query.filter_by(action_type="schedule_created").count() == 0
+
+
+def test_simple_conflict_keeps_all_selected_days_and_times(client, app, users):
+    sign_in(client)
+    client.post("/schedule", data=simple_data(users, shift_days=["4"]))
+    response = client.post(
+        "/schedule",
+        data=simple_data(users, shift_days=["0", "4"], start_time="08:00", notes="Keep this draft"),
+    )
+    assert response.status_code == 400
+    assert b'data-date="2026-10-19" checked' in response.data
+    assert b'data-date="2026-10-23" checked' in response.data
+    assert b'name="start_time" value="08:00"' in response.data
+    assert b'value="Keep this draft"' in response.data
+    with app.app_context():
+        assert ScheduledShift.query.count() == 1
+
+
+def test_simple_overnight_observes_store_zone_and_next_day_leave(client, app, users):
+    app.config["WORKFORCE_TIMEZONE"] = "America/New_York"
+    sign_in(client)
+    with app.app_context():
+        add_leave(users, WEEK + timedelta(days=1))
+    values = simple_data(users, start_time="22:00", end_time="06:00")
+    assert client.post("/schedule", data=values).status_code == 400
+    values["shift_days"] = ["2"]
+    assert client.post("/schedule", data=values).status_code == 302
+    with app.app_context():
+        shift = ScheduledShift.query.one()
+        assert shift.starts_at == datetime(2026, 10, 22, 2)
+        assert shift.ends_at == datetime(2026, 10, 22, 10)
+
+
+def test_simple_clock_change_rejects_entire_group(client, app, users):
+    app.config["WORKFORCE_TIMEZONE"] = "America/New_York"
+    sign_in(client)
+    values = simple_data(
+        users, week="2026-03-02", shift_days=["0", "6"], start_time="02:30", end_time="04:30"
+    )
+    assert client.post("/schedule", data=values).status_code == 400
+    with app.app_context():
+        assert ScheduledShift.query.count() == 0
+
+
+def test_simple_edit_retains_identity_and_rejects_multiple_days(client, app, users):
+    sign_in(client)
+    client.post("/schedule", data=simple_data(users))
+    with app.app_context():
+        shift = ScheduledShift.query.one()
+        shift_id, version = shift.id, shift.version_id
+    values = simple_data(
+        users,
+        shift_id=shift_id,
+        version_id=version,
+        shift_days=[],
+        shift_date="2026-10-21",
+        end_time="18:00",
+    )
+    page = client.get(f"/schedule?week={WEEK}&edit={shift_id}")
+    assert b'name="shift_date"' in page.data and b'name="shift_days"' not in page.data
+    values["shift_days"] = ["0", "2"]
+    assert client.post("/schedule", data=values).status_code == 400
+    values["shift_days"] = []
+    assert client.post("/schedule", data=values).status_code == 302
+    assert client.post("/schedule", data=values).status_code == 409
+    with app.app_context():
+        assert ScheduledShift.query.count() == 1
+        shift = db.session.get(ScheduledShift, shift_id)
+        assert shift.starts_at.day == 21 and shift.ends_at.hour == 18
+
+
+@pytest.mark.parametrize(
+    "zone, day, end",
+    [
+        ("UTC", "2026-10-19", "2026-10-20T09:00"),
+        ("America/New_York", "2026-03-07", "2026-03-08T10:00"),
+    ],
+)
+def test_simple_edit_preserves_existing_full_day_shift(client, app, users, zone, day, end):
+    app.config["WORKFORCE_TIMEZONE"] = zone
+    sign_in(client)
+    assert (
+        client.post(
+            "/schedule", data=shift_data(users, starts_at=day + "T09:00", ends_at=end)
+        ).status_code
+        == 302
+    )
+    with app.app_context():
+        shift = ScheduledShift.query.one()
+        shift_id, version, original_end = shift.id, shift.version_id, shift.ends_at
+    values = simple_data(
+        users,
+        shift_id=shift_id,
+        version_id=version,
+        shift_date=day,
+        shift_days=[],
+        start_time="09:00",
+        end_time=end[11:16],
+        notes="Updated note",
+    )
+    assert client.post("/schedule", data=values).status_code == 302
+    with app.app_context():
+        shift = db.session.get(ScheduledShift, shift_id)
+        assert shift.ends_at == original_end and shift.notes == "Updated note"
+
+
 def add_leave(users, day=WEEK, status="Approved"):
     db.session.add(
         LeaveRequest(
@@ -65,8 +215,11 @@ def test_repeat_conflict_is_atomic_and_keeps_form_values(client, app, users):
         "/schedule", data=shift_data(users, repeat_days=["2", "4"], notes="Keep my draft")
     )
     assert response.status_code == 400 and b"already has a shift" in response.data
-    assert b'value="Keep my draft"' in response.data and b'value="2" checked' in response.data
-    assert b'value="2026-10-19T09:00"' in response.data
+    assert (
+        b'value="Keep my draft"' in response.data
+        and b'data-date="2026-10-21" checked' in response.data
+    )
+    assert b'name="start_time" value="09:00"' in response.data
     with app.app_context():
         assert ScheduledShift.query.count() == 1
         assert AuditLog.query.filter_by(action_type="schedule_created").count() == 1
@@ -297,7 +450,7 @@ def test_adjacent_shifts_are_allowed_and_day_link_prefills_date(client, app, use
         == 302
     )
     page = client.get("/schedule?week=2026-10-19&on=2026-10-23")
-    assert b'value="2026-10-23T09:00"' in page.data
+    assert b'data-date="2026-10-23" checked' in page.data
     assert client.get("/schedule?week=2026-10-19&on=2026-10-26").status_code == 400
 
 

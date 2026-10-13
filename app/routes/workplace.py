@@ -41,6 +41,7 @@ from ..scheduling import (
     monday,
     repeat_intervals,
     selected_week,
+    simple_intervals,
     validate_availability,
     week_calendar,
 )
@@ -216,6 +217,27 @@ def schedule_context(week, editing=None, error=None):
     )
     if request.method == "POST":
         values.update({key: request.form.get(key, "") for key in values})
+    values.update(
+        shift_date=values["starts_at"][:10],
+        start_time=values["starts_at"][11:16],
+        end_time=values["ends_at"][11:16],
+    )
+    chosen_days = [str(default_day.weekday())]
+    if request.method == "POST":
+        if "simple_schedule" in request.form:
+            values.update(
+                {key: request.form.get(key, "") for key in ("shift_date", "start_time", "end_time")}
+            )
+            chosen_days = request.form.getlist("shift_days")
+        else:
+            chosen_days = request.form.getlist("repeat_days")
+            try:
+                chosen_days = [
+                    *chosen_days,
+                    str(date.fromisoformat(values["shift_date"]).weekday()),
+                ]
+            except ValueError:
+                pass
     return dict(
         active_page="schedule",
         page_title="Schedule",
@@ -232,7 +254,12 @@ def schedule_context(week, editing=None, error=None):
         timezone_name=str(zone),
         form_values=values,
         form_error=error,
-        repeat_days=request.form.getlist("repeat_days") if request.method == "POST" else [],
+        chosen_days=chosen_days,
+        original_start=local_input(editing.starts_at)[11:16] if editing else "",
+        original_end=local_input(editing.ends_at)[11:16] if editing else "",
+        original_overnight=bool(
+            editing and local_input(editing.ends_at)[:10] > local_input(editing.starts_at)[:10]
+        ),
     )
 
 
@@ -261,20 +288,32 @@ def schedule():
                         "This shift was cancelled. Refresh the schedule before editing."
                     )
             employee = selected_employee()
-            start = parse_shift_time(request.form.get("starts_at"))
-            end = parse_shift_time(request.form.get("ends_at"))
-            validate_interval(start, end)
+            if "simple_schedule" in request.form:
+                intervals = simple_intervals(
+                    week,
+                    request.form,
+                    parse_shift_time,
+                    editing=record is not None,
+                    original=(local_input(record.starts_at), local_input(record.ends_at))
+                    if record
+                    else None,
+                )
+                start, end = intervals[0]
+            else:
+                start = parse_shift_time(request.form.get("starts_at"))
+                end = parse_shift_time(request.form.get("ends_at"))
+                validate_interval(start, end)
+                intervals = repeat_intervals(
+                    start,
+                    end,
+                    request.form.getlist("repeat_days"),
+                    workplace_zone(),
+                    parse_shift_time,
+                    editing=record is not None,
+                )
             notes = request.form.get("notes", "").strip()
             if len(notes) > 255:
                 raise ValueError("Shift notes must be at most 255 characters.")
-            intervals = repeat_intervals(
-                start,
-                end,
-                request.form.getlist("repeat_days"),
-                workplace_zone(),
-                parse_shift_time,
-                editing=record is not None,
-            )
             for index, (shift_start, shift_end) in enumerate(intervals):
                 validate_interval(shift_start, shift_end)
                 selected_week(

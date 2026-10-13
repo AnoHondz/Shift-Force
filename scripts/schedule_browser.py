@@ -42,10 +42,10 @@ def verify_schedule_builder(page, browser, origin, app, credentials, completed, 
         db.session.commit()
     page.goto(origin + "/schedule?week=" + week.isoformat())
     page.locator(f'[data-schedule-day="{week.isoformat()}"]').click()
-    expect(page.get_by_label("Start", exact=True)).to_have_value(week.isoformat() + "T09:00")
+    expect(page.get_by_label("Start time", exact=True)).to_have_value("09:00")
     page.get_by_label("Employee", exact=True).select_option(str(employee_id))
+    page.get_by_text("Add a note", exact=True).click()
     page.get_by_label("Notes (optional)").fill("Opening crew")
-    page.locator(".schedule-repeat summary").click()
     page.get_by_label("Wed", exact=True).check()
     page.get_by_label("Fri", exact=True).check()
     expect(page.locator("#shift-preview")).to_have_text("8 scheduled hours")
@@ -66,7 +66,7 @@ def verify_schedule_builder(page, browser, origin, app, credentials, completed, 
     page.locator(f'[data-shift-id="{wednesday_id}"]').get_by_role(
         "link", name="Edit", exact=True
     ).click()
-    page.get_by_label("End", exact=True).fill((week + timedelta(days=2)).isoformat() + "T18:00")
+    page.get_by_label("End time", exact=True).fill("18:00")
     expect(page.locator("#shift-preview")).to_have_text("9 scheduled hours")
     page.get_by_role("button", name="Save shift", exact=True).click()
     expect(page.locator("#schedule-totals")).to_contain_text("25.00")
@@ -88,10 +88,12 @@ def verify_schedule_builder(page, browser, origin, app, credentials, completed, 
         assert db.session.get(ScheduledShift, friday_id).cancelled
         assert db.session.get(ScheduledShift, monday_id).notes == "Opening crew"
     completed.append(
-        "Weekly builder: day links, repeated shifts, employee filter, hour totals and edits"
+        "Simple builder: day buttons, multiple shifts, employee filter, hour totals and edits"
     )
     page.locator(f'[data-schedule-day="{week.isoformat()}"]').click()
     page.get_by_label("Employee", exact=True).select_option(str(employee_id))
+    page.get_by_label("End time", exact=True).fill("17:00")
+    page.get_by_text("Add a note", exact=True).click()
     page.get_by_label("Notes (optional)").fill("Conflict draft")
     rejected_submit()
     expect(page.locator("#schedule-error")).to_contain_text("already has a shift")
@@ -106,19 +108,21 @@ def verify_schedule_builder(page, browser, origin, app, credentials, completed, 
     completed.append(
         "Cancel confirmation and preserved week; overlap/time-off errors keep the draft"
     )
-    page.get_by_label("Start", exact=True).fill("2026-10-31T22:00")
-    page.get_by_label("End", exact=True).fill("2026-11-01T06:00")
+    page.goto(origin + "/schedule?week=2026-10-26&on=2026-10-31")
+    page.get_by_label("Start time", exact=True).fill("22:00")
+    page.get_by_label("End time", exact=True).fill("06:00")
     expect(page.locator("#shift-preview")).to_have_text("9 scheduled hours · Ends Sun, Nov 1")
-    page.get_by_label("Start", exact=True).fill("2026-03-08T01:30")
-    page.get_by_label("End", exact=True).fill("2026-03-08T03:30")
+    page.goto(origin + "/schedule?week=2026-03-02&on=2026-03-08")
+    page.get_by_label("Start time", exact=True).fill("01:30")
+    page.get_by_label("End time", exact=True).fill("03:30")
     expect(page.locator("#shift-preview")).to_have_text("1 scheduled hour")
-    page.get_by_label("Start", exact=True).fill("2026-03-08T02:30")
+    page.get_by_label("Start time", exact=True).fill("02:30")
     expect(page.locator("#shift-preview")).to_have_text(
         "Choose valid times outside the clock change."
     )
-    assert not page.get_by_label("End", exact=True).evaluate("input => input.checkValidity()")
-    page.get_by_label("Start", exact=True).fill(thursday.isoformat() + "T09:00")
-    page.get_by_label("End", exact=True).fill(thursday.isoformat() + "T17:00")
+    assert not page.get_by_label("End time", exact=True).evaluate("input => input.checkValidity()")
+    page.goto(origin + "/schedule?week=" + week.isoformat() + "&on=" + thursday.isoformat())
+    page.get_by_label("Employee", exact=True).select_option(str(employee_id))
     page.set_viewport_size({"width": 390, "height": 844})
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     expect(page.get_by_role("button", name="Save shift", exact=True)).to_be_visible()

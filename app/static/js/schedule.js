@@ -27,26 +27,43 @@
     }
     function update() {
       end.setCustomValidity('');
-      const first = instant(start.value), last = instant(end.value);
+      const dates = form.querySelector('[name="shift_date"]')
+        ? [form.querySelector('[name="shift_date"]').value].filter(Boolean)
+        : [...form.querySelectorAll('[name="shift_days"]:checked')].map(input => input.dataset.date);
+      document.getElementById('save-schedule').textContent = dates.length > 1 ? `Save ${dates.length} shifts` : 'Save shift';
+      if (!dates.length) {
+        preview.textContent = 'Choose at least one day.';
+        end.setCustomValidity(preview.textContent); return;
+      }
       if (!start.value || !end.value) { preview.textContent = 'Choose start and end times.'; return; }
-      if (first === null || last === null) {
+      const keepOvernight = form.dataset.originalOvernight === 'true' &&
+        start.value === form.dataset.originalStart && end.value === form.dataset.originalEnd;
+      if (start.value === end.value && !keepOvernight) {
+        preview.textContent = 'Choose different start and end times.';
+        end.setCustomValidity(preview.textContent); return;
+      }
+      const overnight = end.value < start.value || keepOvernight;
+      const intervals = dates.map(day => {
+        const endDate = new Date(day + 'T12:00:00Z');
+        if (overnight) endDate.setUTCDate(endDate.getUTCDate() + 1);
+        return [instant(day + 'T' + start.value), instant(endDate.toISOString().slice(0, 10) + 'T' + end.value)];
+      });
+      if (intervals.some(([first, last]) => first === null || last === null)) {
         preview.textContent = 'Choose valid times outside the clock change.';
         end.setCustomValidity(preview.textContent); return;
       }
-      const hours = (last - first) / 3600000;
-      if (hours <= 0 || hours > 24) {
+      const durations = intervals.map(([first, last]) => (last - first) / 3600000);
+      if (durations.some(hours => hours <= 0 || hours > 24)) {
         preview.textContent = 'End must follow start, with a shift of at most 24 hours.';
         end.setCustomValidity(preview.textContent); return;
       }
       const endDate = new Intl.DateTimeFormat('en-US', {
         timeZone: form.dataset.timezone, weekday: 'short', month: 'short', day: 'numeric',
-      }).format(last);
-      preview.textContent = `${Number(hours.toFixed(2))} scheduled ${hours === 1 ? 'hour' : 'hours'}` +
-        (end.value.slice(0, 10) > start.value.slice(0, 10) ? ` · Ends ${endDate}` : '');
-      const count = new Set([new Date(start.value.slice(0, 10) + 'T12:00:00Z').getUTCDay(),
-        ...[...form.querySelectorAll('[name="repeat_days"]:checked')]
-          .map(input => (+input.value + 1) % 7)]).size;
-      document.getElementById('save-schedule').textContent = count > 1 ? `Save ${count} shifts` : 'Save shift';
+      }).format(intervals[0][1]);
+      const low = Number(Math.min(...durations).toFixed(2)), high = Number(Math.max(...durations).toFixed(2));
+      preview.textContent = `${low === high ? low : `${low}–${high}`} scheduled ${high === 1 ? 'hour' : 'hours'}` +
+        (low !== high ? ' per shift' : '') +
+        (overnight ? (dates.length === 1 ? ` · Ends ${endDate}` : ' · Ends next morning') : '');
     }
     form.addEventListener('input', update);
     form.addEventListener('change', update);
@@ -57,14 +74,13 @@
       button.addEventListener('click', event => {
         if (form.querySelector('[name="shift_id"]')) return;
         event.preventDefault();
-        builder.open = true;
-        start.value = button.dataset.scheduleDay + 'T09:00'; end.value = button.dataset.scheduleDay + 'T17:00';
-        form.querySelectorAll('[name="repeat_days"]').forEach(input => { input.checked = false; });
+        form.querySelectorAll('[name="shift_days"]').forEach(input => {
+          input.checked = input.dataset.date === button.dataset.scheduleDay;
+        });
         update(); builder.scrollIntoView({behavior: 'smooth', block: 'start'});
         document.getElementById('scheduled-employee').focus({preventScroll: true});
       });
     });
-    if (window.location.hash === '#schedule-builder') builder.open = true;
     update();
     const error = document.getElementById('schedule-error');
     if (error) error.focus();

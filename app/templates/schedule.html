@@ -10,11 +10,29 @@
       <a class="btn btn-ghost" href="{{ url_for('workplace.schedule', week=next_week.isoformat(), staff=staff_id) }}" aria-label="Next week">Next</a>
     </nav>
   </div>
+  {% if can_plan %}
+  <section class="surface-card schedule-builder" id="schedule-builder" aria-labelledby="builder-title"><h3 class="h5 mb-3" id="builder-title">{{ 'Edit shift' if editing else 'Schedule someone' }}</h3>
+    {% if form_error %}<div class="alert alert-danger" role="alert" id="schedule-error" tabindex="-1">{{ form_error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('workplace.schedule') }}" id="shift-form" class="schedule-shift-form" data-timezone="{{ timezone_name }}" data-original-start="{{ original_start }}" data-original-end="{{ original_end }}" data-original-overnight="{{ 'true' if original_overnight else 'false' }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="simple_schedule" value="1" /><input type="hidden" name="week" value="{{ week.isoformat() }}" />{% if staff_id %}<input type="hidden" name="staff" value="{{ staff_id }}" />{% endif %}
+      {% if editing %}<input type="hidden" name="shift_id" value="{{ editing.id }}" /><input type="hidden" name="version_id" value="{{ form_values.version_id }}" />{% endif %}
+      <div class="schedule-employee-field"><label class="form-label" for="scheduled-employee">Employee</label><select class="form-select" id="scheduled-employee" name="employee_id" required><option value="">Choose an employee</option>{% for employee in employees if not employee.archived %}<option value="{{ employee.id }}" {% if form_values.employee_id == employee.id|string %}selected{% endif %}>{{ employee.full_name() }}</option>{% endfor %}</select></div>
+      {% if editing %}<div class="schedule-days-field"><label class="form-label" for="shift-date">Day</label><input class="form-control" id="shift-date" name="shift_date" type="date" value="{{ form_values.shift_date }}" required /></div>
+      {% else %}<fieldset class="schedule-days-field"><legend class="form-label">Days</legend><div class="schedule-day-buttons">{% for day in calendar %}<label><input type="checkbox" name="shift_days" value="{{ loop.index0 }}" aria-label="{{ day.date.strftime('%a') }}" data-date="{{ day.date.isoformat() }}" {% if loop.index0|string in chosen_days %}checked{% endif %} /><span>{{ day.date.strftime('%a') }}<small aria-hidden="true">{{ day.date.strftime('%d') }}</small></span></label>{% endfor %}</div></fieldset>{% endif %}
+      <div><label class="form-label" for="shift-start">Start time</label><input class="form-control" id="shift-start" type="time" name="start_time" value="{{ form_values.start_time }}" required aria-describedby="shift-preview" /></div>
+      <div><label class="form-label" for="shift-end">End time</label><input class="form-control" id="shift-end" type="time" name="end_time" value="{{ form_values.end_time }}" required aria-describedby="shift-preview" /></div>
+      <p class="schedule-preview" id="shift-preview" aria-live="polite">Choose start and end times.</p>
+      <details class="schedule-notes-field" {% if form_values.notes %}open{% endif %}><summary>Add a note</summary><label class="visually-hidden" for="shift-notes">Notes (optional)</label><input class="form-control mt-2" id="shift-notes" name="notes" maxlength="255" value="{{ form_values.notes }}" placeholder="For example: front counter" /></details>
+      <div class="schedule-form-actions"><button class="btn btn-primary" type="submit" id="save-schedule">Save shift</button>{% if editing %}<a class="btn btn-ghost" href="{{ url_for('workplace.schedule', week=week.isoformat(), staff=staff_id) }}">Discard changes</a>{% endif %}</div>
+    </form>
+    <p class="small text-muted mb-0 mt-3">Saved shifts appear for staff immediately.</p>
+  </section>
+  {% endif %}
   <div class="schedule-overview">
     <p class="mb-0" id="schedule-totals"><strong>{{ shift_count }}</strong> {{ 'shift' if shift_count == 1 else 'shifts' }} <span aria-hidden="true">·</span> <strong>{{ total_hours|hours }}</strong> scheduled hours</p>
     {% if current_user.has_admin_access() %}<form method="get" class="schedule-filter"><input type="hidden" name="week" value="{{ week.isoformat() }}" /><label for="schedule-staff">Show</label><select class="form-select" id="schedule-staff" name="staff"><option value="">All staff</option>{% for employee in employees %}<option value="{{ employee.id }}" {% if staff_id == employee.id %}selected{% endif %}>{{ employee.full_name() }}</option>{% endfor %}</select><button type="submit" class="btn btn-ghost">Apply</button></form>{% endif %}
   </div>
-  {% if not shift_count %}<p class="schedule-empty">No shifts posted for this week.{% if can_plan %} Add a shift below or choose a day.{% endif %}</p>{% endif %}
+  {% if not shift_count %}<p class="schedule-empty">No shifts posted for this week.{% if can_plan %} Choose a person and days above.{% endif %}</p>{% endif %}
   <div class="schedule-board-scroll" tabindex="0" aria-label="Weekly schedule">
     <div class="schedule-board">
       {% for day in calendar %}<section class="schedule-day {% if day.today %}is-today{% endif %}" aria-labelledby="day-{{ day.date.isoformat() }}">
@@ -38,23 +56,7 @@
       </section>{% endfor %}
     </div>
   </div>
-  {% if can_plan %}
-  <details class="surface-card schedule-builder" id="schedule-builder" {% if editing or form_error or request.args.get('on') %}open{% endif %}><summary>{{ 'Edit shift' if editing else 'Add a shift' }}</summary>
-    <p class="small text-muted mt-3">Saved shifts are visible to staff immediately. Times use {{ timezone_name }}.</p>
-    {% if form_error %}<div class="alert alert-danger" role="alert" id="schedule-error" tabindex="-1">{{ form_error }}</div>{% endif %}
-    <form method="post" action="{{ url_for('workplace.schedule') }}" id="shift-form" class="schedule-shift-form" data-timezone="{{ timezone_name }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="week" value="{{ week.isoformat() }}" />{% if staff_id %}<input type="hidden" name="staff" value="{{ staff_id }}" />{% endif %}
-      {% if editing %}<input type="hidden" name="shift_id" value="{{ editing.id }}" /><input type="hidden" name="version_id" value="{{ form_values.version_id }}" />{% endif %}
-      <div class="schedule-employee-field"><label class="form-label" for="scheduled-employee">Employee</label><select class="form-select" id="scheduled-employee" name="employee_id" required><option value="">Choose an employee</option>{% for employee in employees if not employee.archived %}<option value="{{ employee.id }}" {% if form_values.employee_id == employee.id|string %}selected{% endif %}>{{ employee.full_name() }}</option>{% endfor %}</select></div>
-      <div><label class="form-label" for="shift-start">Start</label><input class="form-control" id="shift-start" type="datetime-local" name="starts_at" value="{{ form_values.starts_at }}" required aria-describedby="shift-preview" /></div>
-      <div><label class="form-label" for="shift-end">End</label><input class="form-control" id="shift-end" type="datetime-local" name="ends_at" value="{{ form_values.ends_at }}" required aria-describedby="shift-preview" /></div>
-      <p class="schedule-preview" id="shift-preview" aria-live="polite">Choose start and end times.</p>
-      <div class="schedule-notes-field"><label class="form-label" for="shift-notes">Notes (optional)</label><input class="form-control" id="shift-notes" name="notes" maxlength="255" value="{{ form_values.notes }}" placeholder="For example: front counter" /></div>
-      {% if not editing %}<details class="schedule-repeat" {% if repeat_days %}open{% endif %}><summary>Repeat this shift</summary><p class="small text-muted mt-2">Add these hours on other days in the start date's week. The original shift is included.</p><fieldset><legend class="visually-hidden">Additional days</legend><div class="schedule-repeat-days">{% for label in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<label><input type="checkbox" name="repeat_days" value="{{ loop.index0 }}" {% if loop.index0|string in repeat_days %}checked{% endif %} /> {{ label }}</label>{% endfor %}</div></fieldset><p class="small text-muted mt-2 mb-0">If any day conflicts, no shifts in this group are saved.</p></details>{% endif %}
-      <div class="schedule-form-actions"><button class="btn btn-primary" type="submit" id="save-schedule">Save shift</button>{% if editing %}<a class="btn btn-ghost" href="{{ url_for('workplace.schedule', week=week.isoformat(), staff=staff_id) }}">Discard changes</a>{% endif %}</div>
-    </form>
-  </details>
-  {% endif %}
+
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/schedule.js') }}" defer></script>{% endblock %}

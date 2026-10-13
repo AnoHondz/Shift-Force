@@ -437,9 +437,11 @@ def test_schedule_builder_cannot_read_or_modify_other_location(client, locations
         "/s/mcdonalds-broad-street/schedule",
         data={
             "employee_id": "2",
-            "starts_at": "2026-10-19T09:00",
-            "ends_at": "2026-10-19T17:00",
-            "repeat_days": ["2"],
+            "simple_schedule": "1",
+            "week": "2026-10-19",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "shift_days": ["0", "2"],
             "notes": "Broad-only planned coverage",
         },
     )
