@@ -147,8 +147,11 @@ def test_void_retains_record_and_recalculates_week(client, app, users):
         PayrollRecord.recalculate_week(employee.id, MONDAY)
         db.session.commit()
         record_id = rows[0].id
+        version = rows[0].version_id
     client.post("/login", data={"username": "admin_user", "password": TEST_PASSWORD})
-    assert client.post(f"/payroll/{record_id}/delete").status_code == 302
+    assert (
+        client.post(f"/payroll/{record_id}/delete", data={"version_id": version}).status_code == 302
+    )
     with app.app_context():
         assert PayrollRecord.query.count() == 5
         assert db.session.get(PayrollRecord, record_id).status == "Voided"

@@ -153,6 +153,9 @@ def open_store(slug):
     response = redirect(request.script_root + "/s/" + slug + "/dashboard")
     user_agent = request.headers.get("User-Agent", "")
     remote_address = request.remote_addr
+    hub_token = current_user.auth_token
+    hub_mfa_verified = session.get("mfa_verified") == hub_token
+    hub_mfa_verified_at = session.get("mfa_verified_at", 0)
     # The hub's CSRF-protected, ownership-checked POST issues only this store's cookie.
     with child.test_request_context(
         "/",
@@ -164,6 +167,11 @@ def open_store(slug):
         if not account or not account.is_active:
             abort(403, description="Your store account is inactive.")
         session.clear()
+        session.update(
+            hub_owner_token=hub_token,
+            hub_mfa_verified=hub_mfa_verified,
+            hub_mfa_verified_at=hub_mfa_verified_at,
+        )
         login_user(account, remember=False)
         create_audit_log(
             account,

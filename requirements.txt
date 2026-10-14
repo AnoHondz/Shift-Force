@@ -9,3 +9,11 @@ reportlab==5.0.1
 Pillow==12.3.0
 tzdata==2026.5
 redis==8.1.0
+
+pyotp==2.10.0
+cryptography==50.0.2
+qrcode==8.2
+waitress==3.0.2
+filelock==4.1.1
+boto3==1.43.112
+gunicorn==26.2.0; sys_platform != "win32"

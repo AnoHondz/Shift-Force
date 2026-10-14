@@ -32,7 +32,7 @@
     {% endif %}
     <div class="col-md-3">
       <label class="form-label">Work Date</label>
-      <input id="work_date" name="work_date" type="date" class="form-control" required />
+      <input id="work_date" name="work_date" type="date" class="form-control" max="{{ store_today }}" required />
       <button class="btn btn-sm btn-link px-0" type="button" id="todayBtn">Use Today</button>
     </div>
     <div class="col-md-3">
@@ -82,10 +82,12 @@
               <td class="text-end">
                 {% if admin_view and current_user.role in Role.PAYROLL_REVIEW and not record.legacy_import and record.employee_id != current_user.employee_id %}
                   <div class="action-cluster">
-                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="action" value="review" /><button class="btn btn-sm btn-ghost" type="submit">Review</button></form>
-                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
-                    <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
-                    <form method="post" action="{{ url_for('employees.delete_payroll', record_id=record.id) }}" onsubmit="return confirm('Void this entry and recalculate its workweek?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-sm btn-outline-secondary" type="submit">Void</button></form>
+                    {% if record.status in ['Pending', 'Reviewed'] %}
+                      <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ record.version_id }}" /><input type="hidden" name="action" value="review" /><button class="btn btn-sm btn-ghost" type="submit">Review</button></form>
+                      <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ record.version_id }}" /><input type="hidden" name="action" value="approve" /><button class="btn btn-sm btn-outline-success" type="submit">Approve</button></form>
+                      <form method="post" action="{{ url_for('employees.review_payroll', record_id=record.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ record.version_id }}" /><input type="hidden" name="action" value="reject" /><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('employees.delete_payroll', record_id=record.id) }}" onsubmit="return confirm('Void this entry and recalculate its workweek?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ record.version_id }}" /><button class="btn btn-sm btn-outline-secondary" type="submit">Void</button></form>
                   </div>
                 {% else %}
                   <span class="small text-muted">{{ 'Imported · reconciliation required' if record.legacy_import else record.status }}</span>
@@ -128,7 +130,7 @@
 
   if (todayBtn && workDate) {
     todayBtn.addEventListener('click', function () {
-      workDate.value = new Date().toISOString().split('T')[0];
+      workDate.value = {{ store_today|tojson }};
     });
   }
 

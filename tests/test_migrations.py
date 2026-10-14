@@ -27,34 +27,51 @@ def test_factory_does_not_create_tables(tmp_path):
 
 
 def test_store_registry_upgrade_preserves_accounts_and_existing_references(tmp_path):
-    from app.models import Employee, Notification, Role, User
+    from app.models import Notification, Role, User
 
     app = migration_app(tmp_path)
     with app.app_context():
         upgrade(revision="0004_channels")
-        user = User(
-            username="existing.owner",
-            role=Role.ADMIN,
-            employee=Employee(first_name="Existing", last_name="Owner", email="owner@example.com"),
+        db.session.execute(
+            text(
+                "INSERT INTO employees (id,first_name,last_name,email,job_title,schedule,hourly_rate,overtime_multiplier,date_hired,archived) VALUES (1,'Existing','Owner','owner@example.com','Owner','Weekdays',0,1.5,'2026-10-01',0)"
+            )
         )
+        user = User(username="existing.owner", role=Role.ADMIN)
         user.set_password(secrets.token_urlsafe(20))
-        db.session.add(user)
-        db.session.flush()
+        db.session.execute(
+            text(
+                "INSERT INTO users (id,username,password_hash,role,employee_id) VALUES (1,'existing.owner',:hash,'admin',1)"
+            ),
+            {"hash": user.password_hash},
+        )
         db.session.add(
-            Notification(user_id=user.id, title="Retain inbox", message="Keep me", category="info")
+            Notification(user_id=1, title="Retain inbox", message="Keep me", category="info")
         )
         db.session.commit()
-        users_before = db.session.execute(text("SELECT * FROM users ORDER BY id")).all()
+        users_before = db.session.execute(
+            text(
+                "SELECT id,username,password_hash,role,employee_id,created_at FROM users ORDER BY id"
+            )
+        ).all()
         notifications_before = db.session.execute(
             text("SELECT * FROM notifications ORDER BY id")
         ).all()
         upgrade()
-        assert db.session.execute(text("SELECT * FROM users ORDER BY id")).all() == users_before
+        assert (
+            db.session.execute(
+                text(
+                    "SELECT id,username,password_hash,role,employee_id,created_at FROM users ORDER BY id"
+                )
+            ).all()
+            == users_before
+        )
         assert (
             db.session.execute(text("SELECT * FROM notifications ORDER BY id")).all()
             == notifications_before
         )
         assert db.session.execute(text("PRAGMA foreign_key_check")).all() == []
+        user = db.session.get(User, 1)
         user.role = Role.OWNER
         db.session.commit()
 
@@ -69,7 +86,7 @@ def test_fresh_migration_and_second_upgrade_are_idempotent(tmp_path):
         upgrade()
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0005_stores"
+            == "0006_operations"
         )
 
 
@@ -198,5 +215,5 @@ def test_migration_downgrade_refuses_destructive_changes(tmp_path):
             downgrade(revision="0001_baseline")
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0005_stores"
+            == "0006_operations"
         )

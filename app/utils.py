@@ -1,8 +1,22 @@
 import re
-from datetime import date
+from datetime import date, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
+from flask import current_app
 from flask_login import current_user
+
+
+def store_today():
+    """Use the workplace calendar even when the web server runs in UTC."""
+    from .models import utcnow
+
+    return (
+        utcnow()
+        .replace(tzinfo=timezone.utc)
+        .astimezone(ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
+        .date()
+    )
 
 
 def get_current_employee():

@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -36,3 +37,14 @@ class Config:
     STORE_DATABASE_ROOT = os.getenv("STORE_DATABASE_ROOT")
     WORKFORCE_TIMEZONE = os.getenv("WORKFORCE_TIMEZONE", "UTC")
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    DATA_ROOT = os.getenv("DATA_ROOT")
+    MFA_ENCRYPTION_KEY = os.getenv("MFA_ENCRYPTION_KEY")
+    REQUIRE_PRIVILEGED_MFA = APP_ENV == "production"
+    PUBLIC_ORIGIN = os.getenv("PUBLIC_ORIGIN", os.getenv("RENDER_EXTERNAL_URL", ""))
+    TRUSTED_HOSTS = [urlsplit(PUBLIC_ORIGIN).hostname] if PUBLIC_ORIGIN else None
+    TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true"
+    BACKUP_ENCRYPTION_KEY = os.getenv("BACKUP_ENCRYPTION_KEY")
+    BACKUP_BUCKET = os.getenv("BACKUP_BUCKET")
+    BACKUP_PREFIX = os.getenv("BACKUP_PREFIX", "shiftspace")
+    BACKUP_INTERVAL_SECONDS = int(os.getenv("BACKUP_INTERVAL_SECONDS", "86400"))
+    REQUIRE_PAYROLL_REVIEW = APP_ENV == "production"

@@ -1,3 +1,4 @@
+from .accounts import accounts_bp
 from .api import api_bp
 from .assistant import assistant_bp
 from .attendance import attendance_bp
@@ -13,6 +14,7 @@ from .workplace import workplace_bp
 
 def register_blueprints(app):
     app.register_blueprint(auth_bp)
+    app.register_blueprint(accounts_bp)
     app.register_blueprint(assistant_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(attendance_bp)

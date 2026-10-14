@@ -1,5 +1,5 @@
 import csv
-from datetime import date, timedelta
+from datetime import timedelta
 from io import BytesIO, StringIO
 
 from flask import Blueprint, Response, flash, render_template, request
@@ -11,7 +11,7 @@ from sqlalchemy import asc, desc, func
 from ..decorators import roles_required
 from ..models import Department, Employee, PayrollRecord, Role
 from ..payroll import PayPeriod, Workweek
-from ..utils import parse_date, parse_positive_int
+from ..utils import parse_date, parse_positive_int, store_today
 
 
 def csv_safe(value):
@@ -27,7 +27,7 @@ reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 
 
 def get_period_bounds(period: str):
-    today = date.today()
+    today = store_today()
     if period == "last30":
         bounds = PayPeriod(today - timedelta(days=29), today)
     elif period == "monthly":
@@ -48,7 +48,6 @@ def fetch_report_rows(period: str):
             PayrollRecord.work_date.between(start_date, end_date),
             PayrollRecord.status.notin_(["Rejected", "Voided"]),
         )
-        .filter(PayrollRecord.status.notin_(["Rejected", "Voided"]))
     )
     return query, start_date, end_date
 
@@ -201,6 +200,8 @@ def export_csv():
             "Regular Hours",
             "Overtime Hours",
             "Total Pay",
+            "Status",
+            "Imported - reconciliation required",
         ]
     )
     for row in rows:
@@ -216,6 +217,8 @@ def export_csv():
                 f"{row.regular_hours:.2f}",
                 f"{row.overtime_hours:.2f}",
                 f"{row.total_pay:.2f}",
+                row.status,
+                "Yes" if row.legacy_import else "No",
             ]
         )
     filename = f"{period}-payroll-report.csv"
@@ -256,13 +259,21 @@ def export_pdf():
     y = height - 0.75 * inch
 
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(0.75 * inch, y, "Payroll and Workforce Report")
+    pdf.drawString(0.75 * inch, y, "Payroll Estimates and Workforce Report")
     y -= 0.25 * inch
     pdf.setFont("Helvetica", 10)
     pdf.drawString(0.75 * inch, y, f"Period: {start_date} to {end_date}")
+    y -= 0.2 * inch
+    pdf.drawString(
+        0.75 * inch,
+        y,
+        "Estimates include unapproved entries; imported rows require reconciliation.",
+    )
     y -= 0.35 * inch
 
-    headers = "Date       Employee                Department           Hours   OT    Total"
+    headers = (
+        "Date       Employee             Department     Hours    OT     Total  Status    Imported"
+    )
     pdf.setFont("Courier-Bold", 9)
     pdf.drawString(0.75 * inch, y, headers)
     y -= 0.2 * inch
@@ -274,9 +285,10 @@ def export_pdf():
         for row in rows:
             line = (
                 f"{row.work_date:%Y-%m-%d}  "
-                f"{row.employee.full_name()[:22]:22}  "
-                f"{(row.employee.department.name if row.employee.department else 'Unassigned')[:18]:18}  "
+                f"{row.employee.full_name()[:20]:20}  "
+                f"{(row.employee.department.name if row.employee.department else 'Unassigned')[:12]:12}  "
                 f"{row.hours_worked:5.2f}  {row.overtime_hours:4.2f}  ${row.total_pay:8.2f}"
+                f"  {row.status:8}  {'Yes' if row.legacy_import else 'No'}"
             )
             pdf.drawString(0.75 * inch, y, line)
             y -= 0.18 * inch

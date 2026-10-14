@@ -42,7 +42,9 @@
                 <a class="nav-link" href="{{ url_for('leave.index') }}">Time off</a>
                 <a class="nav-link" href="{{ url_for('employees.team_directory') }}">Coworkers</a>
                 <a class="nav-link" href="{{ url_for('notifications.index') }}">Notifications</a>
+                <a class="nav-link" href="{{ url_for('accounts.security') }}">Account security</a>
               </details>{% endif %}
+              {% if not store_info and current_user.role == Role.OWNER %}<a class="nav-link" href="{{ url_for('accounts.security') }}">Account security</a>{% endif %}
             </nav>
           </div>
           <form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-outline-light btn-sm w-100" type="submit">Sign out</button></form>
@@ -55,6 +57,7 @@
               <div class="topbar-caption">Your shift. Your team.</div>
             </div>
             <div class="topbar-user">
+              {% if store_info or current_user.role != Role.OWNER %}<a href="{{ url_for('notifications.index') }}" class="btn btn-ghost btn-sm" aria-label="Open notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><i class="bi bi-bell" aria-hidden="true"></i>{% if unread_notification_count %} <span class="pill-count">{{ unread_notification_count }}</span>{% endif %}</a>{% endif %}
               <div class="avatar-chip">{{ current_user.username[:2]|upper }}</div>
               <div>
                 <div class="fw-semibold" style="color:#f0f5ff">{{ current_user.username }}</div>

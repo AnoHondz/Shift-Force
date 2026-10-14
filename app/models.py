@@ -1,3 +1,4 @@
+import secrets
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -129,6 +130,13 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=utcnow)
 
     employee = db.relationship("Employee", back_populates="user", lazy="joined")
+    auth_token = db.Column(
+        db.String(64), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32)
+    )
+    mfa_secret = db.Column(db.Text, nullable=True)
+    mfa_pending_secret = db.Column(db.Text, nullable=True)
+    mfa_last_step = db.Column(db.BigInteger, nullable=False, default=-1, server_default="-1")
+    mfa_recovery_hashes = db.Column(db.Text, nullable=True)
     notifications = db.relationship(
         "Notification",
         back_populates="user",
@@ -143,6 +151,15 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
+        self.revoke_sessions()
+
+    def revoke_sessions(self):
+        self.auth_token = secrets.token_urlsafe(32)
+        # A setup key exposed to an old session must not survive credential recovery.
+        self.mfa_pending_secret = None
+
+    def get_id(self):
+        return self.auth_token
 
     @property
     def is_active(self):
@@ -197,6 +214,31 @@ class Store(db.Model):
     owner_account_id = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     __table_args__ = (db.Index("ix_store_owner", "owner_id"),)
+
+
+class AccountReset(db.Model):
+    __tablename__ = "account_resets"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    auth_token = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    consumed_at = db.Column(db.DateTime, nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class OperationalReview(db.Model):
+    """Human sign-offs retain evidence; the application never invents compliance approval."""
+
+    __tablename__ = "operational_reviews"
+    id = db.Column(db.Integer, primary_key=True)
+    review_type = db.Column(db.String(40), nullable=False)
+    reference = db.Column(db.String(255), nullable=False)
+    scope = db.Column(db.Text, nullable=False)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    reviewed_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    __table_args__ = (db.Index("ix_operational_review_type", "review_type"),)
 
 
 class PayrollRecord(db.Model):
@@ -480,6 +522,13 @@ class AuditLog(db.Model):
         "admin_created",
         "role_updated",
         "password_reset",
+        "password_reset_requested",
+        "password_changed",
+        "sessions_revoked",
+        "mfa_enabled",
+        "mfa_verified",
+        "mfa_reset",
+        "payroll_policy_reviewed",
         "attendance_corrected",
         "schedule_created",
         "schedule_updated",

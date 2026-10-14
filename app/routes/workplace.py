@@ -33,6 +33,7 @@ from ..models import (
     TeamChannel,
     TeamMessage,
     create_audit_log,
+    create_notification,
     utcnow,
 )
 from ..scheduling import (
@@ -345,6 +346,10 @@ def schedule():
             return render_template(
                 "schedule.html", **schedule_context(week, record, message)
             ), status
+        old_employee = record.employee if record else None
+        old_interval = (
+            (record.employee_id, record.starts_at, record.ends_at, record.notes) if record else None
+        )
         before = (
             f"{record.employee_id}: {record.starts_at} to {record.ends_at}; {record.notes}"
             if record
@@ -369,6 +374,29 @@ def schedule():
                 str(shift.id),
                 f"Before: {before}. After: {employee.id}: {shift_start} to {shift_end}; {notes} (UTC).",
             )
+        if old_interval != (employee.id, start, end, notes):
+            zone = workplace_zone()
+            labels = [
+                f"{local_datetime(first, zone).strftime('%a, %b %d %I:%M %p')} to {local_datetime(last, zone).strftime('%a, %b %d %I:%M %p')}"
+                for first, last in intervals
+            ]
+            if employee.user:
+                create_notification(
+                    employee.user,
+                    "Shift changed" if record else "New shifts posted",
+                    "; ".join(labels) + f" ({zone}). Check your schedule.",
+                    "/schedule?week=" + monday(local_datetime(start, zone).date()).isoformat(),
+                    "schedule",
+                )
+            if old_employee and old_employee.id != employee.id and old_employee.user:
+                create_notification(
+                    old_employee.user,
+                    "Shift reassigned",
+                    f"Your shift starting {local_datetime(old_interval[1], zone).strftime('%a, %b %d %I:%M %p')} was reassigned. Check your schedule.",
+                    "/schedule?week="
+                    + monday(local_datetime(old_interval[1], zone).date()).isoformat(),
+                    "schedule",
+                )
         db.session.commit()
         flash(
             "Schedule saved." if len(intervals) == 1 else f"{len(intervals)} shifts saved.",
@@ -409,6 +437,15 @@ def cancel_shift(shift_id):
         str(record.id),
         f"Cancelled {record.employee.full_name()}: {record.starts_at} to {record.ends_at} (UTC).",
     )
+    if record.employee.user:
+        create_notification(
+            record.employee.user,
+            "Shift cancelled",
+            f"Your shift starting {local_datetime(record.starts_at, workplace_zone()).strftime('%a, %b %d %I:%M %p')} was cancelled.",
+            "/schedule?week="
+            + monday(local_datetime(record.starts_at, workplace_zone()).date()).isoformat(),
+            "schedule",
+        )
     db.session.commit()
     flash("Shift cancelled.", "success")
     return redirect(url_for("workplace.schedule", week=week.isoformat(), staff=staff_id))

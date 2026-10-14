@@ -110,6 +110,7 @@ class StoreRouter:
             ),
         )
         child = create_app(settings)
+        child.extensions["store_hub"] = self.hub
         if not provisioning:
             with child.app_context():
                 # Read only: starting an existing store never upgrades or seeds it.

@@ -1,3 +1,5 @@
+import re
+import time
 from datetime import date
 from urllib.parse import unquote, urlsplit
 
@@ -15,6 +17,7 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import or_
 
+from ..account_security import login_rate_key
 from ..extensions import db, limiter, login_manager
 from ..models import Employee, Role, User, create_audit_log
 from ..stores import invited_employee
@@ -25,10 +28,26 @@ auth_bp = Blueprint("auth", __name__)
 
 @login_manager.user_loader
 def load_user(user_id):
-    if not user_id.isdigit():
+    if not isinstance(user_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", user_id):
         return None
-    user = db.session.get(User, int(user_id))
-    return user if user and user.is_active else None
+    user = User.query.filter_by(auth_token=user_id).first()
+    if not user or not user.is_active:
+        return None
+    info = current_app.config.get("STORE_INFO")
+    if info and user.id == info["owner_account_id"]:
+        hub = current_app.extensions.get("store_hub")
+        hub_token = session.get("hub_owner_token")
+        if not hub or not hub_token:
+            return None
+        from ..account_security import mfa_required
+
+        with hub.app_context():
+            owner = db.session.get(User, info["owner_id"])
+            if not owner or not owner.is_active or owner.auth_token != hub_token:
+                return None
+            if (owner.mfa_secret or mfa_required(owner)) and not session.get("hub_mfa_verified"):
+                return None
+    return user
 
 
 def get_dashboard_endpoint(user):
@@ -90,7 +109,8 @@ def _split_full_name(full_name: str):
 
 @auth_bp.route("/signup", methods=("GET", "POST"))
 @auth_bp.route("/owner/signup", methods=("GET", "POST"), endpoint="signup_owner")
-@limiter.limit("10 per hour", methods=["POST"])
+@limiter.limit("100 per hour", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"], key_func=login_rate_key)
 def signup():
     owner_signup = request.endpoint == "auth.signup_owner"
     if owner_signup and (
@@ -206,7 +226,8 @@ def signup():
 
 
 @auth_bp.route("/login", methods=("GET", "POST"))
-@limiter.limit("10 per minute", methods=["POST"])
+@limiter.limit("100 per minute", methods=["POST"])
+@limiter.limit("10 per minute", methods=["POST"], key_func=login_rate_key)
 def login():
     if current_user.is_authenticated:
         return redirect(url_for(get_dashboard_endpoint(current_user)))
@@ -240,6 +261,14 @@ def login():
             db.session.commit()
         else:
             session.clear()
+            if user.mfa_secret:
+                session.update(
+                    pending_login_token=user.auth_token,
+                    pending_login_at=time.time(),
+                    pending_remember=remember_me,
+                    pending_next=get_next_url(get_dashboard_endpoint(user)),
+                )
+                return redirect(url_for("accounts.mfa"))
             session.permanent = remember_me
             login_user(user, remember=remember_me)
             create_audit_log(

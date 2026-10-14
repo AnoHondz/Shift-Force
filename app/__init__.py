@@ -49,6 +49,13 @@ def create_app(config_object=None):
     from .cli import register_commands
 
     register_commands(app)
+    from .operations import configure_operations
+
+    with app.app_context():
+        configure_operations(app)
+    from .account_security import security_gate
+
+    app.before_request(security_gate)
 
     @app.before_request
     def restrict_owner_hub():
@@ -71,6 +78,12 @@ def create_app(config_object=None):
                 "auth.logout",
                 "auth.signup",
                 "auth.signup_owner",
+                "accounts.security",
+                "accounts.confirm",
+                "accounts.qr",
+                "accounts.mfa",
+                "ops.health",
+                "ops.ready",
                 "static",
             }:
                 abort(403, description="Open one of your stores to access its workplace.")
@@ -120,8 +133,10 @@ def create_app(config_object=None):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         )
-        if current_user.is_authenticated:
+        if current_user.is_authenticated or request.path.startswith("/account/"):
             response.headers["Cache-Control"] = "no-store"
+        if request.path.startswith("/account/"):
+            response.headers["Referrer-Policy"] = "no-referrer"
         if app.config.get("APP_ENV") == "production":
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
         return response

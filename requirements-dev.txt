@@ -4,3 +4,7 @@ ruff==0.17.0
 pip-audit==2.10.1
 playwright==1.63.0
 bandit==1.9.4
+
+PyYAML==6.0.3
+jsonschema==4.26.0
+git-filter-repo==2.47.0

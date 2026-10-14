@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="surface-card find-store"><h1 class="h4">Set your new password</h1><p>Your existing sign-ins will be removed. Two-step verification stays enabled.</p>{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="token" value="{{ token }}" /><label class="form-label" for="reset-password">New password</label><input class="form-control mb-3" id="reset-password" type="password" name="password" required minlength="12" maxlength="128" autocomplete="new-password" /><label class="form-label" for="reset-confirm">Confirm new password</label><input class="form-control mb-3" id="reset-confirm" type="password" name="confirm_password" required minlength="12" maxlength="128" autocomplete="new-password" /><button class="btn btn-primary">Save password</button></form></div>
+{% endblock %}

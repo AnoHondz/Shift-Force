@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -23,6 +23,7 @@ from ..utils import (
     get_current_employee,
     parse_date,
     parse_positive_int,
+    store_today,
     validate_employee_form,
 )
 
@@ -52,7 +53,7 @@ def operations_overview():
     if not current_user.has_admin_access():
         return redirect(url_for("employees.employee_dashboard"))
 
-    today = date.today()
+    today = store_today()
     recent_records = (
         PayrollRecord.query.options(joinedload(PayrollRecord.employee))
         .order_by(PayrollRecord.work_date.desc())
@@ -64,6 +65,7 @@ def operations_overview():
         db.session.query(
             PayrollRecord.work_date, func.sum(PayrollRecord.total_pay).label("total_pay")
         )
+        .filter(PayrollRecord.status.notin_(["Rejected", "Voided"]))
         .group_by(PayrollRecord.work_date)
         .order_by(PayrollRecord.work_date.desc())
         .limit(8)
@@ -87,12 +89,16 @@ def operations_overview():
     active_clock_ins = Attendance.query.filter(Attendance.clock_out_at.is_(None)).count()
     total_employee_count = Employee.query.filter_by(archived=False).count()
 
-    overtime_hours = db.session.query(
-        func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0)
-    ).scalar()
-    regular_hours = db.session.query(
-        func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0)
-    ).scalar()
+    overtime_hours = (
+        db.session.query(func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0))
+        .filter(PayrollRecord.status.notin_(["Rejected", "Voided"]))
+        .scalar()
+    )
+    regular_hours = (
+        db.session.query(func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0))
+        .filter(PayrollRecord.status.notin_(["Rejected", "Voided"]))
+        .scalar()
+    )
     overtime_rate = round((overtime_hours / regular_hours) * 100, 1) if regular_hours else 0
 
     stats = {
@@ -207,7 +213,7 @@ def employee_directory():
     if department_id:
         query = query.filter(Employee.department_id == department_id)
 
-    today = date.today()
+    today = store_today()
     probation_cutoff = today - timedelta(days=90)
     if status_filter == "on_leave":
         query = query.join(
@@ -348,7 +354,7 @@ def add_employee():
                 schedule=schedule,
                 hourly_rate=hourly_rate,
                 overtime_multiplier=overtime_multiplier,
-                date_hired=date.today(),
+                date_hired=store_today(),
             )
             db.session.add(employee)
             create_audit_log(
@@ -547,8 +553,11 @@ def payroll():
             flash("Please choose an employee.", "error")
             return redirect(url_for("employees.payroll"))
 
+        value = str(selected_employee_id)
         selected_employee_id = (
-            parse_positive_int(selected_employee_id, default=None) if selected_employee_id else None
+            int(value)
+            if value.isascii() and value.isdigit() and len(value) <= 18 and int(value) > 0
+            else None
         )
         if not selected_employee_id:
             flash("Please choose a valid employee.", "error")
@@ -561,7 +570,7 @@ def payroll():
             work_date = None
             hours_worked = None
 
-        if not work_date or work_date > date.today() or hours_worked is None:
+        if not work_date or work_date > store_today() or hours_worked is None:
             flash("Provide a valid work date (today or earlier) and 0–24 daily hours.", "error")
             return redirect(
                 url_for(
@@ -608,7 +617,7 @@ def payroll():
             current_user,
             "payroll_created",
             "PayrollRecord",
-            str(employee.id),
+            str(record.id),
             f"Payroll entry for {employee.full_name()} on {work_date}: hours {previous_hours} → {hours_worked}; weekly allocation recalculated.",
         )
         if admin_mode:
@@ -642,9 +651,12 @@ def payroll():
     records_query = PayrollRecord.query.options(joinedload(PayrollRecord.employee))
     records_query = records_query.filter(PayrollRecord.status != "Voided")
     if admin_mode and selected_employee_id:
-        selected_employee_id = parse_positive_int(selected_employee_id, default=None)
-        if selected_employee_id:
-            records_query = records_query.filter_by(employee_id=selected_employee_id)
+        value = str(selected_employee_id)
+        if not value.isascii() or not value.isdigit() or len(value) > 18 or int(value) < 1:
+            abort(400, description="Choose a valid employee filter.")
+        selected_employee_id = int(value)
+        db.get_or_404(Employee, selected_employee_id)
+        records_query = records_query.filter_by(employee_id=selected_employee_id)
     if not admin_mode:
         records_query = records_query.filter_by(employee_id=current_user.employee_id)
     totals = records_query.with_entities(
@@ -676,6 +688,7 @@ def payroll():
         pagination=pagination,
         per_page=per_page,
         admin_view=admin_mode,
+        store_today=store_today().isoformat(),
     )
 
 
@@ -683,18 +696,22 @@ def payroll():
 @roles_required(*Role.PAYROLL_REVIEW)
 def review_payroll(record_id):
     record = db.get_or_404(PayrollRecord, record_id)
-    if (
-        record.employee_id == current_user.employee_id
-        or record.status in {"Voided", "Rejected"}
-        or record.legacy_import
-    ):
-        abort(403, description="You cannot review your own or a voided entry.")
+    if record.employee_id == current_user.employee_id or record.legacy_import:
+        abort(403, description="You cannot review your own or an imported timesheet.")
+    if record.status not in {"Pending", "Reviewed"}:
+        abort(409, description="This timesheet is no longer awaiting review. Refresh the page.")
+    if request.form.get("version_id") != str(record.version_id):
+        abort(409, description="This timesheet changed. Refresh it before reviewing.")
     action = request.form.get("action", "review")
     if action not in {"review", "approve", "reject"}:
         flash("Invalid review action.", "error")
         return redirect(url_for("employees.payroll", employee_id=record.employee_id))
 
     status_map = {"review": "Reviewed", "approve": "Approved", "reject": "Rejected"}
+    if action == "approve":
+        from ..payroll_review import require_payroll_approval
+
+        require_payroll_approval(record)
     record.status = status_map[action]
     record.reviewed_by_id = current_user.id
     record.reviewed_at = db.func.now()
@@ -731,8 +748,14 @@ def review_payroll(record_id):
 @roles_required(*Role.PAYROLL_REVIEW)
 def delete_payroll(record_id):
     record = db.get_or_404(PayrollRecord, record_id)
+    if record.employee_id == current_user.employee_id:
+        abort(403, description="You cannot void your own timesheet.")
     if record.legacy_import:
         abort(400, description="Imported records require manual reconciliation before changes.")
+    if record.status == "Voided":
+        abort(409, description="This timesheet has already been voided.")
+    if request.form.get("version_id") != str(record.version_id):
+        abort(409, description="This timesheet changed. Refresh it before voiding.")
     employee_id = record.employee_id
     create_audit_log(
         current_user,

@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="surface-card today-workspace"><h2 class="h4">Confirm your identity</h2><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><label class="form-label" for="confirmation-password">Your password</label><input class="form-control mb-3" id="confirmation-password" type="password" name="current_password" maxlength="128" autocomplete="current-password" required />{% if require_code %}<label class="form-label" for="confirmation-code">Authenticator or recovery code</label><input class="form-control mb-3" id="confirmation-code" name="code" maxlength="100" autocomplete="one-time-code" required />{% endif %}<button class="btn btn-primary">Confirm identity</button></form></div>
+{% endblock %}

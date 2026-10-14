@@ -10,6 +10,66 @@ from .models import Attendance, Department, Employee, PayrollRecord, Role, User,
 
 
 def register_commands(app):
+    @app.cli.command("reset-mfa")
+    @click.argument("username")
+    @click.option(
+        "--identity-reference",
+        required=True,
+        help="Private identity verification ticket/document reference.",
+    )
+    @click.option("--confirmed-user", prompt="Retype the account username")
+    def reset_mfa(username, identity_reference, confirmed_user):
+        """Recover a lost authenticator through trusted server access and verified identity."""
+        reference = identity_reference.strip()
+        if confirmed_user != username or not 10 <= len(reference) <= 255:
+            raise click.ClickException(
+                "Retype the exact username and provide an identity verification reference."
+            )
+        user = User.query.filter_by(username=username).first()
+        if not user or not user.is_active:
+            raise click.ClickException("Choose an active account after verifying its owner.")
+        user.mfa_secret = None
+        user.mfa_pending_secret = None
+        user.mfa_recovery_hashes = None
+        user.mfa_last_step = -1
+        user.revoke_sessions()
+        create_audit_log(
+            None,
+            "mfa_reset",
+            "User",
+            str(user.id),
+            "Lost authenticator reset through trusted CLI after identity verification; reference: "
+            + reference
+            + ". All sessions revoked; production privileged users must enroll again.",
+        )
+        db.session.commit()
+        click.echo(
+            "Authenticator recovered. All sign-ins were removed; privileged production access requires new enrollment."
+        )
+
+    @app.cli.command("revoke-all-sessions")
+    @click.option("--confirmed-scope", prompt="Type all accounts to confirm")
+    def revoke_all_sessions(confirmed_scope):
+        """Revoke cookies and unfinished enrollments in the explicitly configured database."""
+        if confirmed_scope != "all accounts":
+            raise click.ClickException(
+                "Explicitly confirm the configured database's account scope."
+            )
+        users = User.query.all()
+        for user in users:
+            user.revoke_sessions()
+        create_audit_log(
+            None,
+            "sessions_revoked",
+            "User",
+            None,
+            "Trusted operator revoked every session and pending enrollment in this configured database.",
+        )
+        db.session.commit()
+        click.echo(
+            f"All sign-ins revoked for {len(users)} accounts. Run separately for each store database if required."
+        )
+
     @app.cli.command("correct-attendance")
     @click.argument("record_id", type=int)
     @click.option("--clock-in", required=True, help="ISO timestamp with an explicit UTC offset.")
@@ -92,6 +152,7 @@ def register_commands(app):
             f"Role changed from {user.role} to {role} using CLI.",
         )
         user.role = role
+        user.revoke_sessions()
         db.session.commit()
         click.echo("Role updated.")
 
@@ -108,7 +169,9 @@ def register_commands(app):
         user.set_password(password)
         create_audit_log(None, "password_reset", "User", str(user.id), "Password reset using CLI.")
         db.session.commit()
-        click.echo("Password reset. Rotate FLASK_SECRET_KEY to invalidate existing sessions.")
+        click.echo(
+            "Password reset. Existing sessions, remember cookies and recovery links are revoked."
+        )
 
     @app.cli.command("seed-demo")
     def seed_demo():

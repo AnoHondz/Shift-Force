@@ -45,8 +45,12 @@ def test_payroll_review_requires_admin(client, app, users, payroll_record):
 
     client.post("/logout", follow_redirects=False)
     login(client, "admin_user")
+    with app.app_context():
+        version = db.session.get(PayrollRecord, payroll_record).version_id
     response = client.post(
-        f"/payroll/{payroll_record}/review", data={"action": "approve"}, follow_redirects=False
+        f"/payroll/{payroll_record}/review",
+        data={"action": "approve", "version_id": version},
+        follow_redirects=False,
     )
     assert response.status_code == 302
 

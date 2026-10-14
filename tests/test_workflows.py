@@ -11,6 +11,7 @@ from app.models import (
     Employee,
     LeaveRequest,
     Notification,
+    PayrollRecord,
     Role,
     User,
     utcnow,
@@ -193,14 +194,16 @@ def test_role_mutation_permissions(
         db.session.add(leave)
         db.session.commit()
         leave_id = leave.id
+        payroll_version = db.session.get(PayrollRecord, payroll_record).version_id
     login(client, "admin_user")
     response = client.get("/employees/new")
     assert (response.status_code == 200) == people_allowed
-    client.post(f"/payroll/{payroll_record}/review", data={"action": "approve"})
+    client.post(
+        f"/payroll/{payroll_record}/review",
+        data={"action": "approve", "version_id": payroll_version},
+    )
     client.post(f"/leave/{leave_id}/review", data={"action": "approve"})
     with app.app_context():
-        from app.models import PayrollRecord
-
         assert (
             db.session.get(PayrollRecord, payroll_record).status == "Approved"
         ) == payroll_allowed

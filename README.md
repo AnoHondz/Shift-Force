@@ -19,11 +19,14 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Persistent chat channels with authenticated authors, CSRF-protected sending, escaped text, earlier-message loading, and automatic polling across signed-in coworker sessions. Administrators and executives can create channels.
 - Protected picture sharing with previews, validated/normalized uploads, stripped metadata, bounded dimensions/file sizes, and storage covered by SQLite backups.
 - Searchable emoji picker with categories, skin tones, keyboard navigation, and newer iPhone emoji; all 3,944 Unicode 17.0 fully qualified sequences are available.
+- Owner-facing staff access controls for manager permissions, 30-minute single-use password recovery links, and removal of all staff sign-ins.
+- Encrypted authenticator MFA with one-use recovery codes; management and owners must enroll in production. Password and role changes revoke existing sessions and remembered access.
+- Production Blueprint with a durable volume, shared Key Value rate limits, two Gunicorn workers, health/readiness checks, encrypted coordinated backups and verified off-host restore drills.
 - Optional seven-day remembered sign-in on this device; signing out removes its cookie, while unchecked sign-in uses a browser session.
 - Separate store workspaces with location sign-in links, private staff/schedules/chats/pictures, and an owner account that can switch across its locations.
 - Simple store search by business or street and manager-generated, seven-day invitations for staff to join the correct location.
 - Simple schedule form: choose a person, tap one or more days, and set the hours once. Includes a weekly calendar, staff filtering, hour totals, overnight shifts, and a duration preview in the store's time zone.
-- Approved-time-off and overlapping-shift checks, preserved invalid drafts, versioned edits, confirmed cancellation that retains history, and employee visibility limited to their own shifts.
+- Approved-time-off and overlapping-shift checks, preserved invalid drafts, versioned edits, confirmed cancellation that retains history, and employee visibility limited to their own shifts. Schedule creation, edits, reassignment, and cancellation send private in-app notices, with a visible notification button.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
 - Employee invitations, restricted owner registration, hashed passwords, CSRF-protected sessions, per-location login throttling, and explicit CLI administration.
@@ -55,7 +58,7 @@ flowchart LR
 
 ## Database design
 
-Thirteen domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, audit logs, and the hub's store registry. Each store has its own migrated SQLite database; the hub registry records its owner, display name, location, time zone, and generated storage key.
+Fifteen domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, audit logs, the hub's store registry, single-use account recovery links, and operator policy reviews. Each store has its own migrated SQLite database; the hub registry records its owner, display name, location, time zone, and generated storage key.
 
 ```mermaid
 erDiagram
@@ -78,7 +81,7 @@ Foreign keys are enforced on SQLite connections. Unique daily payroll entries an
 
 ## Authentication and permissions
 
-Workplace registration creates an employee role. Inside a store, an invitation is required and attaches the account to the manager's existing employee profile. `/owner/signup` creates a restricted hub owner who can create/open only their own stores; it cannot grant access to the legacy hub workplace. Both forms ignore submitted role fields. Public registration is disabled by default in production; owner registration can be enabled with `PUBLIC_STORE_OWNER_REGISTRATION=true`. Trusted operators can assign the hub `owner` role with `flask set-role`. Other elevated workplace roles remain trusted CLI assignments.
+Workplace registration creates an employee role. Inside a store, an invitation is required and attaches the account to the manager's existing employee profile. `/owner/signup` creates a restricted hub owner who can create/open only their own stores; it cannot grant access to the legacy hub workplace. Both forms ignore submitted role fields. Public registration is disabled by default in production; owner registration can be enabled with `PUBLIC_STORE_OWNER_REGISTRATION=true`. Trusted operators can assign the hub `owner` role with `flask set-role`. Store administrators and owners use **Manage workplace ? Staff access** to assign employee, manager, HR, or payroll access. Platform administrator/executive/owner assignments remain trusted CLI actions.
 
 | Action | Employee | Manager | HR | Payroll | Admin / Executive |
 |---|---|---|---|---|---|
@@ -108,7 +111,7 @@ Open **Manage workplace → Punches** to select **Correct**, fix times, enter a 
 
 Open **Manage workplace → Schedule** for a Monday–Sunday board. Filter by employee or view the full team; daily and weekly totals count only hours inside the displayed dates. Overnight shifts appear on both dates with continuation labels. On mobile, the board becomes a day agenda.
 
-The form sits above the calendar: choose an **Employee**, tap the **Days**, set **Start time** and **End time**, then **Save shift** (or **Save 3 shifts**, for example). Notes are tucked under **Add a note**. An earlier end time automatically means the next morning. Choose **Add shift** on a calendar day to select just that day while keeping your chosen person and hours. The whole group saves only if every shift passes validation. Existing shifts have Edit and Cancel shift controls; edits change one dated shift, and cancellation asks for confirmation and retains history. Saved shifts are visible to staff immediately; there is no draft/publish stage. The form also works without JavaScript.
+The form sits above the calendar: choose an **Employee**, tap the **Days**, set **Start time** and **End time**, then **Save shift** (or **Save 3 shifts**, for example). Notes are tucked under **Add a note**. An earlier end time automatically means the next morning. Choose **Add shift** on a calendar day to select just that day while keeping your chosen person and hours. The whole group saves only if every shift passes validation. Existing shifts have Edit and Cancel shift controls; edits change one dated shift, and cancellation asks for confirmation and retains history. Saved shifts are visible to staff immediately and send an in-app notice; there is no draft/publish stage. The form also works without JavaScript.
 
 Approved time off blocks new or changed shifts touching that local date; a shift ending exactly at midnight does not occupy the next day. If time off is approved after a shift was posted, the board flags it for review while retaining the shift. Invalid submissions keep the entered values and edit identity. Overlap checks and database triggers, version guards, and a ten-year planning range protect changes. Times use the selected store's zone; ambiguous or nonexistent clock-change inputs are rejected, and repeated shifts preserve wall-clock hours while actual duration can change with daylight saving. Planned hours do not create payroll or punches.
 
@@ -145,7 +148,7 @@ To create your own local administrator instead of demo data:
 python -m flask --app run create-admin
 ```
 
-The CLI prompts for username, email, and a hidden, confirmed password of 12–128 characters. It never runs at startup. Password changes and role assignments are explicit:
+The CLI prompts for username, email, and a hidden, confirmed password of 12–128 characters. It never runs at startup. Staff roles and recovery links are available through **Manage workplace ? Staff access**. Each change requires the owner's password and recent authenticator verification when enabled. Owners can change their own password under **Account security**. Trusted bootstrap and emergency operations remain explicit:
 
 ```text
 python -m flask --app run reset-password USERNAME
@@ -164,7 +167,7 @@ python -m flask --app run set-role USERNAME manager
 | `WORKFORCE_TIMEZONE` | IANA timezone used for attendance day/display; defaults to `UTC` |
 | `RATELIMIT_STORAGE_URI` | `memory://` locally; production requires shared storage such as Redis |
 
-Production startup rejects missing/short secrets, debug mode, insecure cookies, and in-memory rate-limit storage. Use an HTTPS reverse proxy, a suitable WSGI server, private storage, and verified backups before production deployment. The bundled server binds to localhost and disables debug.
+The production setup and its required operator inputs are documented in [deployment and recovery](docs/DEPLOYMENT.md). The Blueprint is prepared for a Virginia pilot of 1?5 stores and 100 staff on one durable instance with two Gunicorn workers and shared Key Value rate limits. Startup rejects insecure cookies, disabled MFA/payroll review, missing encryption keys, invalid HTTPS origins, and unsuitable storage. A coordinated migration phase and verified off-host backup precede web startup. Public deployment has not been performed. The bundled local demo still binds to localhost with debug disabled.
 
 ## Payroll and attendance rules
 
@@ -172,9 +175,11 @@ An entry represents the **total of all shifts on one work date**, with 0–24 ho
 
 The workweek runs **Monday through Sunday**. The first 40 hours are regular hours; later hours use the employee's submitted overtime multiplier. For five 9-hour days at $30/hour and 1.5× overtime: 40 regular hours + 5 overtime hours = **$1,425.00**. Corrections recalculate the whole affected week and reset changed approvals. A selected reporting pay period never resets a workweek's overtime threshold.
 
-Money uses `Decimal` with half-up cent rounding and submitted compensation snapshots. Reports exclude rejected/voided entries; pending/reviewed entries remain estimates. Payroll and leave updates use optimistic versions to prevent stale reviews from overwriting corrections.
+Money uses `Decimal` with half-up cent rounding and submitted compensation snapshots. Reports exclude rejected/voided entries; pending/reviewed entries remain estimates. Payroll review/void controls and leave updates require the displayed optimistic version, preventing old forms from approving or overwriting newer corrections. Approval and imported-record status are included in payroll exports.
 
 Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries; daily timesheet totals remain a separate review workflow. Overnight shifts must be allocated to work dates when submitting timesheets. Managers, HR, administrators, and executives can reconcile punches through Manage workplace. Trusted server operators also have `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
+
+In production, wage approval requires an owner-recorded **Payroll readiness** review with an evidence reference for the supported Virginia policy: 2026?2028 work dates, adult hourly nonexempt staff working at one location, one rate, Monday?Sunday weekly overtime, and no tips, bonuses, deductions, taxes, or payment processing. Imported and mixed-rate workweeks remain blocked. Cross-location combined overtime is handled by the employer's external payroll process; separate store databases do not calculate it. These controls record human review and do not certify legal compliance.
 
 ## Testing and quality
 
@@ -187,6 +192,8 @@ python -m scripts.security_check
 python -m pip_audit -r requirements.txt
 python -m playwright install chromium
 python -m scripts.browser_smoke
+python -m scripts.validate_blueprint
+python -m scripts.production_workload --report artifacts/workload-local.json
 ```
 
 Tests use disposable databases and freshly generated credentials. The GitHub Actions workflow runs these checks on pushes and pull requests. Local verification results and scope are recorded in [verification notes](docs/VERIFICATION.md); a successful local run does not imply that GitHub CI or a production deployment has passed.
@@ -210,6 +217,7 @@ Captured from the running application with synthetic records on October 13, 2026
 | Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |
 | Notifications, reporting, audit | [Inbox](docs/screenshots/notifications.png) · [Reports](docs/screenshots/reports.png) · [Audit](docs/screenshots/audit.png) |
 | Mobile | [Dashboard](docs/screenshots/dashboard-mobile.png) · [Directory](docs/screenshots/employees-mobile.png) · [Payroll](docs/screenshots/payroll-mobile.png) |
+| Staff access and security | [Staff access](docs/screenshots/staff-access.png) ? [Account security](docs/screenshots/account-security.png) ? [Mobile access](docs/screenshots/staff-access-mobile.png) ? [Mobile security](docs/screenshots/account-security-mobile.png) |
 | Mobile workplace tools | [Schedule](docs/screenshots/schedule-mobile.png) · [Chat](docs/screenshots/team-chat-mobile.png) · [Manage workplace](docs/screenshots/manage-workplace-mobile.png) |
 
 Regenerate only from a successful run using `python -m scripts.browser_smoke --screenshots`.
