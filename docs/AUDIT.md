@@ -31,10 +31,10 @@ The reviewed project comprised configuration/startup, the ORM and all route blue
 - Startup no longer initializes/seeds the database. Run `flask db upgrade` explicitly, and create accounts or seed demo data deliberately.
 - Employee archival disables account access, including existing sessions, and never cascades historical deletion. Payroll removal now voids a row.
 - API monetary values/rates are strings, and payroll API rows include status. Attendance timestamps identify UTC explicitly.
-- Management mutation permissions are narrower; settings are an honest read-only policy view. Role/password management is available through trusted CLI access.
+- Management mutation permissions are narrower; settings are an honest read-only policy view. Owners administer staff roles, session revocation and password recovery through the app. Platform roles and emergency owner recovery require trusted CLI access.
 
 ## Remaining boundaries
 
-The work verifies a local portfolio/demo application, not a deployed production system. Historical exposure needs operator rotation and privacy review; imported payroll requires reconciliation; organizational manager scoping, MFA/SSO, email verification/recovery, legal payroll rules, load testing, production Redis/proxy/TLS operation, and externally retained audit storage remain future work.
+The work verifies a portfolio/demo application and a bounded synthetic Linux workload with real Gunicorn, Redis and HTTPS. Production privileged MFA, owner staff controls, in-app schedule notifications and encrypted coordinated recovery are implemented. The detailed current findings are in [FUNCTIONAL_REVIEW.md](FUNCTIONAL_REVIEW.md). Historical exposure still needs external-provider rotation and privacy review, and imported payroll requires source reconciliation. Department-level manager scoping, SSO, email verification/delivery, external audit retention, public hosting/backup/alert activation, hosted capacity and real payroll sign-off remain outside the verified scope.
 
 No public deployment, history rewrite, force-push, merge, or deletion/reset of the original database was performed.

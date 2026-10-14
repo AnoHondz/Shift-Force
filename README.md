@@ -167,7 +167,7 @@ python -m flask --app run set-role USERNAME manager
 | `WORKFORCE_TIMEZONE` | IANA timezone used for attendance day/display; defaults to `UTC` |
 | `RATELIMIT_STORAGE_URI` | `memory://` locally; production requires shared storage such as Redis |
 
-The production setup and its required operator inputs are documented in [deployment and recovery](docs/DEPLOYMENT.md). The Blueprint is prepared for a Virginia pilot of 1?5 stores and 100 staff on one durable instance with two Gunicorn workers and shared Key Value rate limits. Startup rejects insecure cookies, disabled MFA/payroll review, missing encryption keys, invalid HTTPS origins, and unsuitable storage. A coordinated migration phase and verified off-host backup precede web startup. Public deployment has not been performed. The bundled local demo still binds to localhost with debug disabled.
+The production setup and its required operator inputs are documented in [deployment and recovery](docs/DEPLOYMENT.md). The Blueprint is prepared for a Virginia pilot of 1-5 stores and 100 staff on one durable instance with two Gunicorn workers and shared Key Value rate limits. Startup rejects insecure cookies, disabled MFA/payroll review, missing encryption keys, invalid HTTPS origins, and unsuitable storage. A coordinated migration phase and verified off-host backup precede web startup. Public deployment has not been performed. The bundled local demo still binds to localhost with debug disabled.
 
 ## Payroll and attendance rules
 
@@ -228,7 +228,7 @@ Earlier Git history contains `.env`, SQLite databases, and hardcoded credentials
 
 The migration preserves imported payroll totals and marks them for reconciliation because the old app mixed daily and weekly hours. Imported entries are read-only in the browser. No existing database is reset, and destructive downgrades are refused; rollback uses verified backups and the matching previous code.
 
-Known limitations: payroll estimates exclude taxes, deductions, benefits, holiday rules, and jurisdiction-specific compliance; manager read access is organization-wide; notifications are in-app only; no SSO/MFA/email verification or email password recovery; SQLite and report exports are suitable for modest datasets, without large-scale concurrency/performance claims. Inline template scripts currently require an `unsafe-inline` CSP allowance. Production infrastructure and shared Redis rate limiting have not been exercised here.
+Known limitations: payroll estimates exclude taxes, deductions, benefits, holiday rules, and automatic legal compliance; manager read access covers the selected store; notifications are in-app only; SSO, email verification and automated email password recovery are absent. Privileged production MFA and owner-issued staff recovery are implemented. SQLite and report exports suit modest datasets. A finite five-store/100-staff Linux workload passed with 24 concurrent clients, two Gunicorn workers, HTTPS and shared Redis; actual public-host capacity, long soaks, external backups and alert delivery still need operator verification. Inline template scripts currently require an `unsafe-inline` CSP allowance.
 
 ## Portfolio description and verified résumé bullets
 
@@ -240,7 +240,7 @@ Known limitations: payroll estimates exclude taxes, deductions, benefits, holida
 
 ## Future improvements
 
-Department-scoped manager permissions; MFA/SSO and email verification; explicit reconciliation tooling for imported weekly payroll; PostgreSQL migrations and load testing; nonce-based CSP and extracted scripts; payroll policy validation for a chosen jurisdiction; automated attendance-to-timesheet allocation with approved timezone rules.
+Department-scoped manager permissions; SSO and email verification; explicit reconciliation tooling for imported weekly payroll; PostgreSQL migrations, hosted capacity and long-duration testing; nonce-based CSP and extracted scripts; broader payroll policies and cross-location overtime; automated attendance-to-timesheet allocation with approved timezone rules.
 
 ## Troubleshooting
 
