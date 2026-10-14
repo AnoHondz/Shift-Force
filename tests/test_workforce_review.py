@@ -350,6 +350,38 @@ def test_operational_payroll_totals_and_trends_exclude_voided_and_rejected_entri
     assert contexts[0]["payroll_totals"] == [240.0]
 
 
+@pytest.mark.parametrize("username", ["admin_user", "employee_user"])
+def test_payroll_summary_excludes_rejected_and_voided_entries_but_keeps_rejection_visible(
+    client, app, users, username
+):
+    with app.app_context():
+        employee = db.session.get(Employee, users["employee_profile_id"])
+        rows = [
+            PayrollRecord.build(employee, MONDAY, 8),
+            PayrollRecord.build(employee, MONDAY + timedelta(days=1), 12),
+            PayrollRecord.build(employee, MONDAY + timedelta(days=2), 14),
+        ]
+        rows[1].status = "Rejected"
+        rows[2].status = "Voided"
+        db.session.add_all(rows)
+        db.session.commit()
+    login(client, username)
+    contexts = []
+
+    def capture(sender, template, context, **extra):
+        contexts.append(context)
+
+    with template_rendered.connected_to(capture, app):
+        response = client.get("/payroll")
+    assert response.status_code == 200
+    assert b"2026-10-06" in response.data and b"Rejected" in response.data
+    assert b"2026-10-07" not in response.data
+    assert [record.status for record in contexts[0]["records"]] == ["Rejected", "Pending"]
+    assert contexts[0]["summary"] == dict(
+        hours=8.0, regular_hours=8.0, overtime_hours=0.0, total_pay=240.0
+    )
+
+
 def schedule_data(users, **changes):
     data = dict(
         employee_id=users["employee_profile_id"],

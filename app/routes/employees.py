@@ -659,12 +659,16 @@ def payroll():
         records_query = records_query.filter_by(employee_id=selected_employee_id)
     if not admin_mode:
         records_query = records_query.filter_by(employee_id=current_user.employee_id)
-    totals = records_query.with_entities(
-        func.coalesce(func.sum(PayrollRecord.hours_worked), 0.0),
-        func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0),
-        func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0),
-        func.coalesce(func.sum(PayrollRecord.total_pay), 0.0),
-    ).first()
+    totals = (
+        records_query.filter(PayrollRecord.status != "Rejected")
+        .with_entities(
+            func.coalesce(func.sum(PayrollRecord.hours_worked), 0.0),
+            func.coalesce(func.sum(PayrollRecord.regular_hours), 0.0),
+            func.coalesce(func.sum(PayrollRecord.overtime_hours), 0.0),
+            func.coalesce(func.sum(PayrollRecord.total_pay), 0.0),
+        )
+        .first()
+    )
     pagination = records_query.order_by(PayrollRecord.work_date.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
