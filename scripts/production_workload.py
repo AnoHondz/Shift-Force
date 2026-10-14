@@ -197,7 +197,11 @@ class StaffClient:
         self.count += 1
         origin = self.origins[self.count % len(self.origins)]
         payload = urlencode(data).encode() if data is not None else None
-        request = Request(origin + path, data=payload, headers={"Connection": "close"})
+        headers = {"Connection": "close"}
+        if payload is not None:
+            # Match browser HTTPS POSTs; Flask-WTF intentionally requires same-origin referrers.
+            headers.update({"Referer": origin + "/", "Origin": origin})
+        request = Request(origin + path, data=payload, headers=headers)
         started = time.monotonic()
         try:
             response = self.opener.open(request, timeout=60)

@@ -4,9 +4,9 @@ Local verification, including account security, recovery, production setup and t
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **323 passed, 0 failed**, 346.65 seconds in the complete local review run, followed by **42 passed** for the final operations/rate-limit regressions (including nine added during review); current collection is 333 tests. Eight dependency deprecation warnings came from Flask-Login cookie expiry |
+| `python -m pytest -q` | **323 passed, 0 failed**, 346.65 seconds in the complete local review run, followed by **42 passed** for the final operations/rate-limit regressions (including nine added during review) and **2 passed** for real HTTPS proxy/sign-in regressions; current collection is 334 tests. Dependency deprecation warnings came from Flask-Login cookie expiry |
 | Ruff lint | All checks passed |
-| Ruff formatting | 78 Python files passed the scoped format check |
+| Ruff formatting | 79 Python files passed the scoped format check |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | Pinned runtime requirements passed with 0 known vulnerabilities at the time of the audit; Linux-only Gunicorn is additionally audited by hosted CI |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -64,4 +64,4 @@ Hosted CI also completed successfully for the initial implementation commit `0b5
 
 Before production adoption, rotate previously exposed credentials, complete imported-payroll reconciliation, review organization-wide management access, and verify production infrastructure and backups. See [SECURITY.md](SECURITY.md), [MIGRATIONS.md](MIGRATIONS.md), and [BUSINESS_RULES.md](BUSINESS_RULES.md).
 
-Hosted review run for `7c714ed` passed all 332 tests, browser checks, audits and Blueprint validation, but exposed a context-manager error in the disposable TLS proxy before the Linux workload could start. The proxy now closes HTTP connections explicitly; a real trusted-TLS GET/POST/header regression passed locally. The follow-up hosted run verifies the complete 333-test collection and the corrected workload; consult the current PR checks for its observed result.
+Hosted review run for `7c714ed` passed all 332 tests, browser checks, audits and Blueprint validation, but exposed a context-manager error in the disposable TLS proxy before the Linux workload could start. The proxy now closes HTTP connections explicitly. The `914e3bd` run passed all 333 tests and the other checks, then caught a missing same-origin referrer in the synthetic HTTPS sign-in client. The client now sends browser-equivalent Origin/Referer headers. Two real trusted-TLS regressions passed locally, covering forwarding, sign-in, secure session/remember cookies, clock punches and rejection of a foreign referrer with CSRF protection enabled. The follow-up hosted run verifies the complete 334-test collection and corrected workload; consult the current PR checks for its observed result.
