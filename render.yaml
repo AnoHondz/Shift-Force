@@ -3,7 +3,7 @@ services:
     name: shiftspace
     runtime: python
     branch: codex/workforce-production-readiness
-    plan: starter
+    plan: standard
     region: virginia
     numInstances: 1
     autoDeployTrigger: "off"
