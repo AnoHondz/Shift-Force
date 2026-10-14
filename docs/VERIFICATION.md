@@ -4,9 +4,9 @@ Local verification, including account security, recovery, production setup and t
 
 | Check | Executed result |
 |---|---|
-| `python -m pytest -q` | **323 passed, 0 failed**, 346.65 seconds in the complete local review run, followed by **42 passed** for the final operations/rate-limit regressions (including nine added during review); current collection is 332 tests. Eight dependency deprecation warnings came from Flask-Login cookie expiry |
+| `python -m pytest -q` | **323 passed, 0 failed**, 346.65 seconds in the complete local review run, followed by **42 passed** for the final operations/rate-limit regressions (including nine added during review); current collection is 333 tests. Eight dependency deprecation warnings came from Flask-Login cookie expiry |
 | Ruff lint | All checks passed |
-| Ruff formatting | 77 Python files passed the scoped format check |
+| Ruff formatting | 78 Python files passed the scoped format check |
 | Bandit, application/config/startup | 0 unsuppressed findings; two B105 annotations identify validation messages mistaken for password literals |
 | `pip-audit -r requirements.txt` | Pinned runtime requirements passed with 0 known vulnerabilities at the time of the audit; Linux-only Gunicorn is additionally audited by hosted CI |
 | Dependency installation / `pip check` | Clean environment installation and dependency consistency passed |
@@ -63,3 +63,5 @@ GitHub Actions runs the same test, lint, format, security, dependency, and brows
 Hosted CI also completed successfully for the initial implementation commit `0b5cbbc`: [Ubuntu quality checks](https://github.com/AnoHondz/employee-Data-base/actions/runs/38250770446). Later commits run the workflow again; consult the pull request's current checks. A final mobile review added readable, internally scrolling tables and browser assertions that payroll dates occupy one line and the table can be scrolled.
 
 Before production adoption, rotate previously exposed credentials, complete imported-payroll reconciliation, review organization-wide management access, and verify production infrastructure and backups. See [SECURITY.md](SECURITY.md), [MIGRATIONS.md](MIGRATIONS.md), and [BUSINESS_RULES.md](BUSINESS_RULES.md).
+
+Hosted review run for `7c714ed` passed all 332 tests, browser checks, audits and Blueprint validation, but exposed a context-manager error in the disposable TLS proxy before the Linux workload could start. The proxy now closes HTTP connections explicitly; a real trusted-TLS GET/POST/header regression passed locally. The follow-up hosted run verifies the complete 333-test collection and the corrected workload; consult the current PR checks for its observed result.

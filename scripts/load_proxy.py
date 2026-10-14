@@ -2,6 +2,7 @@
 
 import argparse
 import ssl
+from contextlib import closing
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -22,7 +23,7 @@ def main():
                 {"X-Forwarded-For": self.client_address[0], "X-Forwarded-Proto": "https"}
             )
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            with HTTPConnection("127.0.0.1", args.upstream, timeout=60) as connection:
+            with closing(HTTPConnection("127.0.0.1", args.upstream, timeout=60)) as connection:
                 connection.request(self.command, self.path, body=body, headers=headers)
                 upstream = connection.getresponse()
                 content = upstream.read()
