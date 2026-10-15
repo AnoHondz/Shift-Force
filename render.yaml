@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: shiftspace
+    runtime: python
+    branch: codex/workforce-production-readiness
+    plan: standard
+    region: virginia
+    numInstances: 1
+    autoDeployTrigger: "off"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m scripts.production_start
+    healthCheckPath: /readyz
+    disk:
+      name: shiftspace-private-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.12
+      - key: APP_ENV
+        value: production
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: DATA_ROOT
+        value: /var/data
+      - key: DATABASE_URL
+        value: sqlite:////var/data/workforce.db
+      - key: STORE_DATABASE_ROOT
+        value: /var/data/stores
+      - key: WORKFORCE_TIMEZONE
+        value: America/New_York
+      - key: TRUST_PROXY
+        value: "true"
+      - key: PUBLIC_STORE_OWNER_REGISTRATION
+        value: "false"
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      - key: BACKUP_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: us-east-1
+      - key: RATELIMIT_STORAGE_URI
+        fromService:
+          type: keyvalue
+          name: shiftspace-rate-limits
+          property: connectionString
+  - type: keyvalue
+    name: shiftspace-rate-limits
+    plan: starter
+    region: virginia
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

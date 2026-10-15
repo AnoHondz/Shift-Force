@@ -1,19 +1,23 @@
+import secrets
+
 import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Employee, PayrollRecord, Role, User
+from app.models import Employee, PayrollRecord, Role, TeamChannel, User
+
+TEST_PASSWORD = secrets.token_urlsafe(18)
 
 
 class TestConfig:
     TESTING = True
-    SECRET_KEY = "test-secret"
+    SECRET_KEY = secrets.token_hex(32)
+    RATELIMIT_ENABLED = False
+    RATELIMIT_STORAGE_URI = "memory://"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SKIP_BOOTSTRAP_DATA = True
     WTF_CSRF_ENABLED = False
-    DEFAULT_ADMIN_USERNAME = "admin"
-    DEFAULT_ADMIN_PASSWORD = "Admin2026!"
 
 
 @pytest.fixture()
@@ -22,7 +26,10 @@ def app():
     with app.app_context():
         db.drop_all()
         db.create_all()
-        yield app
+        db.session.add(TeamChannel(id=1, name="general", topic="Everyone at work"))
+        db.session.commit()
+    yield app
+    with app.app_context():
         db.session.remove()
         db.drop_all()
 
@@ -55,9 +62,11 @@ def users(app):
         db.session.flush()
 
         admin = User(username="admin_user", role=Role.ADMIN, employee_id=admin_employee.id)
-        admin.set_password("password123")
-        employee = User(username="employee_user", role=Role.EMPLOYEE, employee_id=employee_profile.id)
-        employee.set_password("password123")
+        admin.set_password(TEST_PASSWORD)
+        employee = User(
+            username="employee_user", role=Role.EMPLOYEE, employee_id=employee_profile.id
+        )
+        employee.set_password(TEST_PASSWORD)
         db.session.add_all([admin, employee])
         db.session.commit()
 
@@ -72,8 +81,8 @@ def users(app):
 @pytest.fixture()
 def payroll_record(app, users):
     with app.app_context():
-        employee = Employee.query.get(users["employee_profile_id"])
-        record = PayrollRecord.build(employee, employee.date_hired, 42.5, "Test")
+        employee = db.session.get(Employee, users["employee_profile_id"])
+        record = PayrollRecord.build(employee, employee.date_hired, 9, "Test")
         db.session.add(record)
         db.session.commit()
         return record.id

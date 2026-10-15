@@ -1,7 +1,9 @@
+from conftest import TEST_PASSWORD
+
 from app.models import PayrollRecord
 
 
-def login(client, username, password="password123"):
+def login(client, username, password=TEST_PASSWORD):
     return client.post(
         "/login",
         data={"username": username, "password": password},
@@ -10,10 +12,10 @@ def login(client, username, password="password123"):
 
 
 def test_payroll_calculate_overtime():
-    regular, overtime, total = PayrollRecord.calculate(45, 20, 1.5)
-    assert regular == 40
+    regular, overtime, total = PayrollRecord.calculate(9, 20, 1.5, prior_hours=36)
+    assert regular == 4
     assert overtime == 5
-    assert total == 950
+    assert total == 230
 
 
 def test_report_exports_are_protected_and_work(client, app, users):
@@ -21,7 +23,7 @@ def test_report_exports_are_protected_and_work(client, app, users):
     denied = client.get("/reports/export.csv", follow_redirects=False)
     assert denied.status_code == 302
 
-    client.get("/logout", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
     login(client, "admin_user")
     csv_response = client.get("/reports/export.csv?period=weekly")
     assert csv_response.status_code == 200
@@ -39,7 +41,7 @@ def test_notifications_scope_employee_vs_admin(client, users):
     response = client.get("/notifications/")
     assert response.status_code == 200
 
-    client.get("/logout", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
     login(client, "admin_user")
     response = client.get("/notifications/")
     assert response.status_code == 200

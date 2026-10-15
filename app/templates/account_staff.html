@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="today-workspace">
+  <h2 class="h4">Staff access</h2>
+  <p class="text-muted">Choose who can manage this workplace. Confirm changes with your password.</p>
+  {% if reset_link %}<div class="surface-card mb-3"><h3 class="h5">Password recovery link</h3><p>Check this person's identity, then give them this link privately. It expires in 30 minutes and works once. Their authenticator stays enabled.</p><label class="form-label" for="reset-link">Recovery link</label><input class="form-control" id="reset-link" value="{{ reset_link }}" readonly /><p class="small text-muted mt-2 mb-0">This link is shown only now. Create another if needed.</p></div>{% endif %}
+  <p class="small"><a href="{{ url_for('accounts.confirm') }}">Confirm your identity again</a> if your verification has expired.</p>
+  {% for person in users if person.id != current_user.id and person.role in staff_roles %}
+  <form method="post" class="surface-card mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="user_id" value="{{ person.id }}" />
+    <h3 class="h5">{{ person.employee.full_name() }}</h3><p class="text-muted small">{{ person.username }} · {{ 'Two-step verification enabled' if person.mfa_secret else 'Two-step verification not set up' }}</p>
+    <div class="row g-3"><div class="col-sm-6"><label class="form-label" for="role-{{ person.id }}">Access</label><select class="form-select" name="role" id="role-{{ person.id }}">{% for role in staff_roles %}<option value="{{ role }}" {% if person.role == role %}selected{% endif %}>{{ Role.label(role) }}</option>{% endfor %}</select></div><div class="col-sm-6"><label class="form-label" for="password-{{ person.id }}">Your password</label><input class="form-control" type="password" name="current_password" id="password-{{ person.id }}" autocomplete="current-password" required maxlength="128" /></div></div>
+    <div class="d-flex gap-2 flex-wrap mt-3"><button class="btn btn-primary" name="action" value="role">Save access</button><button class="btn btn-ghost" name="action" value="reset">Create recovery link</button><button class="btn btn-ghost" name="action" value="revoke">Remove all sign-ins</button></div>
+  </form>
+  {% else %}<p>No staff accounts to manage yet. Add a person and invite them to this store.</p>{% endfor %}
+</div>
+{% endblock %}

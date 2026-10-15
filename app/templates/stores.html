@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}My stores · Shiftspace{% endblock %}
+{% block content %}
+<div class="stores-workspace">
+  <div class="stores-intro"><h2>Your locations</h2><p class="text-muted">Open a store to work with its team.</p></div>
+  <div class="stores-grid">
+    {% for store in stores %}<article class="surface-card store-card"><span class="store-icon" aria-hidden="true"><i class="bi bi-shop"></i></span><h3>{{ store.name }}</h3><p class="store-location">{{ store.location }}</p><p class="small">Store code: <strong class="store-code">{{ store.slug }}</strong></p><label class="visually-hidden" for="store-link-{{ store.id }}">{{ store.location }} sign-in link</label><input id="store-link-{{ store.id }}" class="form-control store-link" readonly value="{{ request.host_url.rstrip('/') }}{{ request.script_root }}/s/{{ store.slug }}/login" /><p class="small text-muted">Share this code or link with your team. New staff need an invitation to create an account.</p><form method="post" action="{{ url_for('stores.open_store', slug=store.slug) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button class="btn btn-primary" type="submit">Open {{ store.location }}</button></form></article>
+    {% else %}<div class="surface-card"><h3 class="h5">Add your first store</h3><p class="text-muted mb-0">Give each location its own place for shifts and conversations.</p></div>{% endfor %}
+  </div>
+  <details class="surface-card add-store" {% if not stores or store_error %}open{% endif %}>
+    <summary>Add a store</summary>
+    {% if store_error %}<div class="alert alert-danger mt-3" role="alert">{{ store_error }}</div>{% endif %}
+    <form class="store-form" method="post" action="{{ url_for('stores.index') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div><label class="form-label" for="store-name">Business name</label><input class="form-control" id="store-name" name="name" required maxlength="100" placeholder="Sweet Frog" value="{{ request.form.get('name', '') }}" /></div>
+      <div><label class="form-label" for="store-location">Location</label><input class="form-control" id="store-location" name="location" required maxlength="160" placeholder="Glen Allen" value="{{ request.form.get('location', '') }}" /></div>
+      <div class="store-code-field">
+        <label class="form-label" for="store-slug">Store code</label>
+        <div class="store-code-controls"><input class="form-control" id="store-slug" name="slug" type="text" inputmode="numeric" minlength="6" maxlength="6" pattern="[0-9]{6}" placeholder="482913" aria-describedby="store-code-help store-code-status" value="{{ request.form.get('slug', '') }}" /><button class="btn btn-ghost" id="generate-store-code" type="button" hidden>Generate code</button></div>
+        <p class="small text-muted mt-2 mb-0" id="store-code-help">Choose a six-digit code or select Generate code. Leave blank to generate one when you create the store.</p>
+        <p class="small mt-1 mb-0" id="store-code-status" role="status"></p>
+      </div>
+      <details class="store-options"><summary>Time zone</summary><div class="store-options-fields"><div><label class="form-label" for="store-zone">Time zone</label><select class="form-select" id="store-zone" name="timezone">{% for zone, label in [('America/New_York', 'Eastern'), ('America/Chicago', 'Central'), ('America/Denver', 'Mountain'), ('America/Los_Angeles', 'Pacific'), ('America/Anchorage', 'Alaska'), ('Pacific/Honolulu', 'Hawaii'), ('Europe/London', 'London'), ('UTC', 'UTC')] %}<option value="{{ zone }}" {% if request.form.get('timezone', 'America/New_York') == zone %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div></details>
+      <button class="btn btn-primary" type="submit">Create store</button>
+    </form>
+  </details>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/stores.js') }}"></script>{% endblock %}

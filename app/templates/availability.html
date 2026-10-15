@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="planning-narrow"><div class="schedule-toolbar"><div><h2 class="h4">My availability</h2><p class="text-muted small">Your usual weekly hours · {{ timezone_name }}</p></div><a class="btn btn-ghost" href="{{ url_for('workplace.schedule') }}">Back to schedule</a></div>
+<section class="surface-card"><p>Choose when you can usually work. Existing shifts stay on your schedule; contact your manager if they conflict.</p>
+{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="version_id" value="{{ version }}" />
+<div class="availability-grid">{% for label in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}{% set rule = rules[loop.index0] %}{% set day = loop.index0 %}
+<fieldset class="availability-row"><legend>{{ label }}</legend><div><label class="visually-hidden" for="mode-{{ day }}">{{ label }} availability</label><select class="form-select" name="mode_{{ day }}" id="mode-{{ day }}"><option value="any" {% if rule.mode == 'any' %}selected{% endif %}>Any time</option><option value="hours" {% if rule.mode == 'hours' %}selected{% endif %}>Specific hours</option><option value="off" {% if rule.mode == 'off' %}selected{% endif %}>Unavailable</option></select></div><div><label class="form-label small" for="start-{{ day }}">From</label><input class="form-control" id="start-{{ day }}" type="time" name="start_{{ day }}" value="{{ '%02d:%02d'|format(rule.start // 60, rule.start % 60) if rule.mode == 'hours' else '09:00' }}" /></div><div><label class="form-label small" for="end-{{ day }}">Until</label><input class="form-control" id="end-{{ day }}" type="time" name="end_{{ day }}" value="{{ '%02d:%02d'|format((rule.end % 1440) // 60, rule.end % 60) if rule.mode == 'hours' else '17:00' }}" /></div></fieldset>
+{% endfor %}</div><p class="small text-muted">For overnight availability, enter hours on both days. An end of 12:00 AM means the end of that day.</p><button class="btn btn-primary">Save availability</button></form></section></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/availability.js') }}" defer></script>{% endblock %}

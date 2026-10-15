@@ -7,7 +7,6 @@ from ..decorators import roles_required
 from ..models import AuditLog, Role, User
 from ..utils import parse_date, parse_positive_int
 
-
 audit_bp = Blueprint("audit", __name__, url_prefix="/audit")
 
 
@@ -35,18 +34,30 @@ def index():
             )
         )
     if start_date:
-        query = query.filter(AuditLog.created_at >= datetime.combine(start_date, datetime.min.time()))
+        query = query.filter(
+            AuditLog.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
         query = query.filter(AuditLog.created_at <= datetime.combine(end_date, datetime.max.time()))
     if severity:
         if severity == "critical":
-            query = query.filter(AuditLog.action_type.in_(["employee_deleted", "login_failed", "security_alert"]))
+            query = query.filter(
+                AuditLog.action_type.in_(["employee_deleted", "login_failed", "security_alert"])
+            )
         elif severity == "high":
-            query = query.filter(AuditLog.action_type.in_(["employee_updated", "leave_reviewed", "payroll_deleted"]))
+            query = query.filter(
+                AuditLog.action_type.in_(["employee_updated", "leave_reviewed", "payroll_deleted"])
+            )
         elif severity == "info":
-            query = query.filter(AuditLog.action_type.in_(["profile_updated", "attendance_clocked_in", "attendance_clocked_out"]))
+            query = query.filter(
+                AuditLog.action_type.in_(
+                    ["profile_updated", "attendance_clocked_in", "attendance_clocked_out"]
+                )
+            )
 
-    pagination = query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.order_by(AuditLog.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     logs = pagination.items
     return render_template(
         "audit_logs.html",

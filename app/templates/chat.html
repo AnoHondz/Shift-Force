@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}#{{ channel.name }} · Shiftspace{% endblock %}
+{% block content %}
+<div class="chat-layout">
+  <aside class="channel-sidebar" aria-label="Chat channels">
+    <div class="channel-workspace"><span class="workspace-symbol">S</span><div><strong>{{ store_info.name if store_info else 'Shiftspace' }}</strong><span>{{ store_info.location if store_info else "Your team's space" }}</span></div></div>
+    <div class="channel-list-heading">CHANNELS <span>{{ channels|length }}</span></div>
+    <nav class="channel-list" aria-label="Channels">
+      {% for item in channels %}<a class="channel-link {% if item.id == channel.id %}selected{% endif %}" href="{{ url_for('workplace.chat', channel_id=item.id) }}" {% if item.id == channel.id %}aria-current="page"{% endif %}><span aria-hidden="true">#</span><span>{{ item.name }}</span></a>{% endfor %}
+    </nav>
+    {% if current_user.role in [Role.ADMIN, Role.EXECUTIVE] %}
+    <details class="create-channel"><summary>Create channel <span aria-hidden="true">+</span></summary><form method="post" action="{{ url_for('workplace.create_channel') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><label for="channel-name">Channel name</label><input id="channel-name" class="form-control" name="name" maxlength="40" required placeholder="for example: shift-swaps" /><label for="channel-topic">Description (optional)</label><input id="channel-topic" class="form-control" name="topic" maxlength="160" placeholder="What's this channel for?" /><p class="small text-muted">Everyone in your workplace can join.</p><button class="btn btn-primary" type="submit">Create channel</button></form></details>
+    {% endif %}
+    <div class="channel-user"><span class="member-avatar">{{ current_user.username[:1]|upper }}</span><div><strong>{{ current_user.employee.first_name }}</strong><span>{{ role_label(current_user.role) }}</span></div></div>
+  </aside>
+  {% include "_team_chat.html" %}
+  <aside class="coworker-sidebar" aria-label="Coworkers"><div class="channel-list-heading">COWORKERS <span>{{ coworkers|length }}</span></div>{% for person in coworkers %}<div class="coworker-item"><span class="member-avatar">{{ person.first_name[:1] }}{{ person.last_name[:1] }}</span><div><strong>{{ person.full_name() }}</strong><span>{{ person.department.name if person.department else person.job_title }}</span></div></div>{% endfor %}</aside>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/emoji-picker.js') }}"></script><script src="{{ url_for('static', filename='js/team-chat.js') }}"></script>{% endblock %}

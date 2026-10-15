@@ -1,8 +1,9 @@
 import csv
-from datetime import date, timedelta
+from datetime import timedelta
 from io import BytesIO, StringIO
+from zoneinfo import ZoneInfo
 
-from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, current_app, flash, render_template, request
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -10,19 +11,40 @@ from sqlalchemy import asc, desc, func
 
 from ..decorators import roles_required
 from ..models import Department, Employee, PayrollRecord, Role
-from ..utils import parse_date, parse_positive_int
+from ..payroll import PayPeriod, Workweek
+from ..time_review import source_stale_ids
+from ..utils import parse_date, parse_positive_int, store_today
+
+
+def csv_safe(value):
+    # Prevent spreadsheet applications interpreting untrusted text as formulas.
+    return (
+        "'" + value
+        if value.lstrip().startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n"))
+        else value
+    )
+
+
+def hours_source(row, stale):
+    if row.legacy_import:
+        return "Imported"
+    if row.id in stale:
+        return "CHANGED"
+    return "Clock" if row.attendance_fingerprint else "Manual"
 
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 
 
 def get_period_bounds(period: str):
-    today = date.today()
+    today = store_today()
     if period == "last30":
-        return today - timedelta(days=30), today
-    if period == "monthly":
-        return today.replace(day=1), today
-    return today - timedelta(days=today.weekday()), today
+        bounds = PayPeriod(today - timedelta(days=29), today)
+    elif period == "monthly":
+        bounds = PayPeriod(today.replace(day=1), today)
+    else:
+        bounds = PayPeriod(Workweek.containing(today).start, today)
+    return bounds.start, bounds.end
 
 
 def fetch_report_rows(period: str):
@@ -32,7 +54,10 @@ def fetch_report_rows(period: str):
     query = (
         PayrollRecord.query.join(Employee)
         .join(Department, isouter=True)
-        .filter(PayrollRecord.work_date.between(start_date, end_date))
+        .filter(
+            PayrollRecord.work_date.between(start_date, end_date),
+            PayrollRecord.status.notin_(["Rejected", "Voided"]),
+        )
     )
     return query, start_date, end_date
 
@@ -54,7 +79,10 @@ def index():
         rows_query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(requested_start, requested_end))
+            .filter(
+                PayrollRecord.work_date.between(requested_start, requested_end),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
         )
         start_date, end_date = requested_start, requested_end
     else:
@@ -71,7 +99,9 @@ def index():
     }
     sort_column = sort_map.get(sort, PayrollRecord.work_date)
     order_clause = desc(sort_column) if direction == "desc" else asc(sort_column)
-    pagination = rows_query.order_by(order_clause, Employee.last_name, Employee.first_name).paginate(
+    pagination = rows_query.order_by(
+        order_clause, Employee.last_name, Employee.first_name
+    ).paginate(
         page=page,
         per_page=per_page,
         error_out=False,
@@ -84,7 +114,10 @@ def index():
             func.sum(PayrollRecord.total_pay).label("total_pay"),
             func.sum(PayrollRecord.overtime_hours).label("overtime_hours"),
         )
-        .filter(PayrollRecord.work_date.between(start_date, end_date))
+        .filter(
+            PayrollRecord.work_date.between(start_date, end_date),
+            PayrollRecord.status.notin_(["Rejected", "Voided"]),
+        )
         .group_by(PayrollRecord.work_date)
         .order_by(PayrollRecord.work_date)
         .all()
@@ -110,7 +143,10 @@ def index():
             PayrollRecord.query.with_entities(Department.name, func.sum(PayrollRecord.total_pay))
             .join(Employee, Employee.id == PayrollRecord.employee_id)
             .join(Department, Department.id == Employee.department_id, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .group_by(Department.name)
             .order_by(func.sum(PayrollRecord.total_pay).desc())
             .all()
@@ -143,13 +179,17 @@ def index():
 @roles_required(*Role.ADMIN_LIKE)
 def export_csv():
     period = request.args.get("period", "weekly")
+    period = period if period in {"weekly", "monthly", "last30"} else "weekly"
     start_date = parse_date(request.args.get("start_date", ""))
     end_date = parse_date(request.args.get("end_date", ""))
     if start_date and end_date and start_date <= end_date:
         query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .order_by(Employee.last_name, Employee.first_name)
         )
     else:
@@ -157,32 +197,43 @@ def export_csv():
         query = query.order_by(Employee.last_name, Employee.first_name)
     rows = query.all()
     output = StringIO()
+    stale = source_stale_ids(rows, ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
     writer = csv.writer(output)
     writer.writerow(
         [
             "Employee",
             "Position",
             "Department",
-            "Week Start",
-            "Week End",
+            "Work Date",
+            "Period Start",
+            "Period End",
             "Hours Worked",
             "Regular Hours",
             "Overtime Hours",
             "Total Pay",
+            "Status",
+            "Imported - reconciliation required",
+            "Hours Source",
+            "Clock source changed - reconciliation required",
         ]
     )
     for row in rows:
         writer.writerow(
             [
-                row.employee.full_name(),
-                row.employee.job_title,
-                row.employee.department.name if row.employee.department else "Unassigned",
+                csv_safe(row.employee.full_name()),
+                csv_safe(row.employee.job_title),
+                csv_safe(row.employee.department.name if row.employee.department else "Unassigned"),
+                row.work_date.isoformat(),
                 start_date.isoformat(),
                 end_date.isoformat(),
                 f"{row.hours_worked:.2f}",
                 f"{row.regular_hours:.2f}",
                 f"{row.overtime_hours:.2f}",
                 f"{row.total_pay:.2f}",
+                row.status,
+                "Yes" if row.legacy_import else "No",
+                hours_source(row, stale),
+                "Yes" if row.id in stale else "No",
             ]
         )
     filename = f"{period}-payroll-report.csv"
@@ -197,33 +248,50 @@ def export_csv():
 @roles_required(*Role.ADMIN_LIKE)
 def export_pdf():
     period = request.args.get("period", "weekly")
+    period = period if period in {"weekly", "monthly", "last30"} else "weekly"
     start_date = parse_date(request.args.get("start_date", ""))
     end_date = parse_date(request.args.get("end_date", ""))
     if start_date and end_date and start_date <= end_date:
         query = (
             PayrollRecord.query.join(Employee)
             .join(Department, isouter=True)
-            .filter(PayrollRecord.work_date.between(start_date, end_date))
+            .filter(
+                PayrollRecord.work_date.between(start_date, end_date),
+                PayrollRecord.status.notin_(["Rejected", "Voided"]),
+            )
             .order_by(PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name)
         )
     else:
         query, start_date, end_date = fetch_report_rows(period)
-        query = query.order_by(PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name)
+        query = query.order_by(
+            PayrollRecord.work_date.desc(), Employee.last_name, Employee.first_name
+        )
 
-    rows = query.limit(500).all()
+    rows = query.all()
     buffer = BytesIO()
+    stale = source_stale_ids(rows, ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     y = height - 0.75 * inch
 
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(0.75 * inch, y, "Payroll and Workforce Report")
+    pdf.drawString(0.75 * inch, y, "Payroll Estimates and Workforce Report")
     y -= 0.25 * inch
     pdf.setFont("Helvetica", 10)
     pdf.drawString(0.75 * inch, y, f"Period: {start_date} to {end_date}")
+    y -= 0.2 * inch
+    pdf.drawString(
+        0.75 * inch,
+        y,
+        "Estimates include unapproved entries; imported rows require reconciliation.",
+    )
     y -= 0.35 * inch
+    pdf.drawString(
+        0.75 * inch, y, "Source CHANGED means clock records require reconciliation before payroll."
+    )
+    y -= 0.25 * inch
 
-    headers = "Date       Employee                Department           Hours   OT    Total"
+    headers = "Date       Employee             Department     Hours    OT     Total  Status    Imported Source"
     pdf.setFont("Courier-Bold", 9)
     pdf.drawString(0.75 * inch, y, headers)
     y -= 0.2 * inch
@@ -235,9 +303,11 @@ def export_pdf():
         for row in rows:
             line = (
                 f"{row.work_date:%Y-%m-%d}  "
-                f"{row.employee.full_name()[:22]:22}  "
-                f"{(row.employee.department.name if row.employee.department else 'Unassigned')[:18]:18}  "
+                f"{row.employee.full_name()[:20]:20}  "
+                f"{(row.employee.department.name if row.employee.department else 'Unassigned')[:12]:12}  "
                 f"{row.hours_worked:5.2f}  {row.overtime_hours:4.2f}  ${row.total_pay:8.2f}"
+                f"  {row.status:8}  {'Yes' if row.legacy_import else 'No'}"
+                f"  {hours_source(row, stale)}"
             )
             pdf.drawString(0.75 * inch, y, line)
             y -= 0.18 * inch

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Today · Shiftspace{% endblock %}
+{% block content %}
+<div class="workplace-greeting"><h2>Hi, {{ shift_employee.first_name if shift_employee else current_user.username }}.</h2><p class="text-muted">Ready for the day?</p></div>
+<div class="today-workspace">
+  <div>
+    {% include "_shift_clock.html" %}
+    {% if not shift_employee %}<div class="surface-card mb-4">Ask an administrator to link your employee profile to use the shift clock.</div>{% endif %}
+    <section class="surface-card" aria-label="Your schedule">
+      <div class="d-flex justify-content-between gap-2 mb-3"><h2 class="h5">Coming up</h2><a href="{{ url_for('workplace.schedule') }}">View schedule</a></div>
+      {% for shift in upcoming %}
+        <div class="shift-line"><strong>{{ shift.starts_at|localtime }}</strong><div class="text-muted small">Until {{ shift.ends_at|localtime }}</div>{% if shift.notes %}<p class="mb-0 small">{{ shift.notes }}</p>{% endif %}</div>
+      {% else %}<p class="text-muted mb-0">No upcoming shifts posted yet.</p>{% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}

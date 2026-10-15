@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="surface-card find-store"><h1 class="h4">Verify your sign-in</h1><p>Enter your authenticator code or an unused recovery code.</p>{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><label class="form-label" for="mfa-code">Verification code</label><input class="form-control mb-3" id="mfa-code" name="code" maxlength="100" required autocomplete="one-time-code" /><button class="btn btn-primary">Verify sign-in</button></form></div>
+{% endblock %}

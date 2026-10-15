@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="surface-card store-invite"><h2>Invite {{ employee.first_name }}</h2><p class="text-muted">Share this link with {{ employee.full_name() }} to join {{ store_info.name }} at {{ store_info.location }}. It works for seven days and can create one account.</p><label class="form-label" for="invite-link">Invitation link</label><input id="invite-link" class="form-control" readonly value="{{ invite_link }}" onclick="this.select()" /><p class="small text-muted mt-2">Select the link to copy it.</p><a class="btn btn-ghost mt-2" href="{{ url_for('employees.employee_detail', employee_id=employee.id) }}">Back to employee</a></div>
+{% endblock %}

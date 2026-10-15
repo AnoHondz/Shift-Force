@@ -1,0 +1,27 @@
+<section class="team-chat conversation" aria-label="Team chat" data-chat data-endpoint="{{ url_for('workplace.messages') }}" data-channel-id="{{ channel.id }}" data-timezone="{{ config.get('WORKFORCE_TIMEZONE', 'UTC') }}">
+  <header class="conversation-header"><span class="channel-hash" aria-hidden="true">#</span><div><h1>{{ channel.name }}</h1><p>{{ channel.topic or 'A space for your coworkers to talk.' }}</p></div><span class="conversation-label">TEAM CHAT</span></header>
+  <div class="chat-messages" role="log" aria-label="Coworker messages" aria-live="polite">
+    <button class="chat-history" type="button" data-load-older {% if messages|length < 25 %}hidden{% endif %}>Load earlier messages</button>
+    {% for message in messages %}
+    {% set author = message.user.employee.full_name() if message.user.employee else message.user.username %}
+    <article class="chat-message" data-message-id="{{ message.id }}"><span class="message-avatar" aria-hidden="true">{{ author[:1]|upper }}</span><div class="chat-message-content"><div class="chat-message-heading"><strong>{{ author }}</strong><time datetime="{{ message.created_at.isoformat() }}Z">{{ message.created_at|localtime }}</time></div>{% if message.body %}<p>{{ message.body }}</p>{% endif %}{% if message.attachment %}<a class="chat-picture-link" href="{{ url_for('workplace.picture', attachment_id=message.attachment.id) }}" target="_blank" rel="noopener"><img class="chat-picture" src="{{ url_for('workplace.picture', attachment_id=message.attachment.id) }}" alt="{{ message.attachment.filename }} shared by {{ author }}" loading="lazy" /></a>{% endif %}</div></article>
+    {% endfor %}
+    <div class="chat-empty" {% if messages %}hidden{% endif %}><div class="empty-channel-icon" aria-hidden="true">#</div><h2>Welcome to #{{ channel.name }}</h2><p>This is the start of the conversation. Say hello or share a picture.</p></div>
+  </div>
+  <form class="chat-compose" enctype="multipart/form-data">
+    <div class="picture-preview" data-picture-preview hidden><img alt="Picture ready to share" /><span data-picture-name></span><button type="button" data-remove-picture aria-label="Remove picture">×</button></div>
+    <label class="visually-hidden" for="team-message">Message your team</label>
+    <textarea id="team-message" name="body" rows="2" maxlength="2000" placeholder="Message #{{ channel.name }}"></textarea>
+    <div class="compose-toolbar"><div class="d-flex align-items-center gap-2"><label class="picture-picker" for="chat-picture" title="Attach a picture"><i class="bi bi-plus-circle" aria-hidden="true"></i><span>Add picture</span></label><input type="file" id="chat-picture" name="picture" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" /><button type="button" class="emoji-picker" data-emoji aria-label="Choose emoji" aria-expanded="false" aria-controls="emoji-popover" aria-haspopup="dialog">☺</button></div><button class="btn btn-primary" type="submit"><i class="bi bi-send" aria-hidden="true"></i> Send</button></div>
+    <div id="emoji-popover" class="emoji-popover" role="dialog" aria-label="Choose emoji" data-emoji-catalog="{{ url_for('static', filename='data/emoji.json') }}" hidden>
+      <div class="emoji-popover-heading"><strong>Emoji</strong><button type="button" data-emoji-close aria-label="Close emoji picker">×</button></div>
+      <label class="visually-hidden" for="emoji-search">Search emoji</label><input id="emoji-search" class="form-control" type="search" placeholder="Search emoji" autocomplete="off" />
+      <nav class="emoji-categories" aria-label="Emoji categories"></nav>
+      <div class="emoji-filter"><span data-emoji-heading>Smileys</span><label class="visually-hidden" for="emoji-tone">Skin tone</label><select id="emoji-tone" class="form-select"><option value="0">Default tone</option><option value="1">🏻 Light</option><option value="2">🏼 Medium-light</option><option value="3">🏽 Medium</option><option value="4">🏾 Medium-dark</option><option value="5">🏿 Dark</option><option value="all">All variations</option></select></div>
+      <div class="emoji-grid" role="group" aria-label="Emoji choices"></div>
+      <div class="emoji-picker-status" data-emoji-status role="status">Choose an emoji to add it to your message.</div>
+    </div>
+  </form>
+  <div class="chat-footer"><span data-chat-status role="status">Updates automatically</span><span>Pictures up to 5 MB · Enter to send</span></div>
+  <noscript>Enable JavaScript to send messages and see new replies.</noscript>
+</section>

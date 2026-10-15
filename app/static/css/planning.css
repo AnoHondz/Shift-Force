@@ -1,0 +1,26 @@
+.planning-narrow { max-width: 960px; }
+.planning-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 20px; }
+.planning-links a, .schedule-offer { display: inline-flex; align-items: center; min-height: 40px; color: #c8b9f1; font-size: .88rem; }
+.planning-publish { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-color: #69528c; }
+.schedule-draft { display: block; width: fit-content; color: #f1d199; background: #4c3c2c; border-radius: 6px; padding: 4px 8px; font-size: .72rem; margin: 8px 0; }
+.planning-week-tools summary { min-height: 40px; color: #c8b9f1; cursor: pointer; }
+.planning-week-content { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+.schedule-offer { background: transparent; border: 0; padding: 0 4px; text-align: left; }
+.availability-grid { display: grid; gap: 12px; margin: 24px 0; }
+.availability-row { display: grid; grid-template-columns: 1.1fr 1.2fr 1fr 1fr; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #3a3844; }
+.availability-row legend { float: none; width: auto; margin: 0; font-size: .9rem; }
+.availability-row .form-label { margin-bottom: 4px; }
+.availability-row .availability-time[hidden] { display: none; }
+.coverage-list { display: grid; gap: 16px; }
+.coverage-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.coverage-card > div { min-width: 0; overflow-wrap: anywhere; }
+.coverage-actions form { display: flex; gap: 8px; flex-wrap: wrap; }
+.planning-filter { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.planning-filter > div { flex: 1; min-width: 180px; }
+@media (max-width: 650px) {
+  .planning-publish, .coverage-card { flex-direction: column; align-items: stretch; }
+  .planning-week-content { grid-template-columns: minmax(0, 1fr); }
+  .availability-row { grid-template-columns: 1fr 1fr; }
+  .availability-row legend { grid-column: 1 / -1; }
+  .availability-row > div:first-of-type { grid-column: 1 / -1; }
+}

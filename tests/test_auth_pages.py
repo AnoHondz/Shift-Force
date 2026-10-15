@@ -1,3 +1,5 @@
+from conftest import TEST_PASSWORD
+
 from app.models import Role, User
 
 
@@ -12,7 +14,7 @@ def test_signup_page_renders_signup_tab_active(client):
     assert response.status_code == 200
     assert b"Create your account" in response.data
     assert b"Create Account</a>" in response.data
-    assert b"auth-tab active\" href=\"/signup\"" in response.data
+    assert b'auth-tab active" href="/signup"' in response.data
 
 
 def test_signup_rejects_password_mismatch_and_preserves_values(client):
@@ -22,7 +24,7 @@ def test_signup_rejects_password_mismatch_and_preserves_values(client):
             "full_name": "Taylor Jordan",
             "username": "taylorj",
             "email": "taylor@example.com",
-            "password": "password123",
+            "password": TEST_PASSWORD,
             "confirm_password": "password321",
         },
         follow_redirects=True,
@@ -40,8 +42,8 @@ def test_signup_creates_employee_accounts_only(client, app):
             "full_name": "Taylor Jordan",
             "username": "taylor_employee",
             "email": "taylor.employee@example.com",
-            "password": "password123",
-            "confirm_password": "password123",
+            "password": TEST_PASSWORD,
+            "confirm_password": TEST_PASSWORD,
         },
         follow_redirects=False,
     )
@@ -61,8 +63,8 @@ def test_successful_signup_redirects_to_signin_with_success_flash(client):
             "full_name": "Morgan Lee",
             "username": "morganlee",
             "email": "morgan.lee@example.com",
-            "password": "password123",
-            "confirm_password": "password123",
+            "password": TEST_PASSWORD,
+            "confirm_password": TEST_PASSWORD,
         },
         follow_redirects=True,
     )
