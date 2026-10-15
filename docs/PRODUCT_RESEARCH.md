@@ -56,6 +56,8 @@ The Clock hours screen compares published plans with actual completed punches an
 
 An authorized reviewer can prepare the displayed week as pending daily timesheets. Open punches, protected/imported/voided entries, future work and mismatched manual totals block the operation. Existing notes and compensation snapshots are retained. Source/target snapshots reject stale previews and repeated writes, and the SQLite writer is acquired before command validation across workers. Daily records retain their clock-source fingerprint. Later punch corrections are flagged and block approval until reconciled. Preparation never approves wages, runs taxes or initiates payment; employees can inspect only their own clock review.
 
+CSV and PDF exports also disclose manual/imported/clock origins and changed clock sources, including changes after an earlier approval. Source validation batches punch reads across employees/workweeks rather than issuing a separate database query for every timesheet. These disclosures remain estimates and reconciliation aids, not a provider-certified payroll export or payment receipt.
+
 The separation follows the [DOL's recordkeeping guidance](https://www.dol.gov/general/topic/workhours/hoursrecordkeeping), which requires accurate actual hours and workweek records. The existing reviewed Virginia date/rate gate remains bounded by the [official state statute](https://law.lis.virginia.gov/vacode/title40.1/chapter3/section40.1-28.10/). These references do not establish automatic compliance or resolve employee classification, tips, paid/unpaid-break policy, imported data or cross-location overtime.
 
 ## Engineering quality

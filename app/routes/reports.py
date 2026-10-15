@@ -1,8 +1,9 @@
 import csv
 from datetime import timedelta
 from io import BytesIO, StringIO
+from zoneinfo import ZoneInfo
 
-from flask import Blueprint, Response, flash, render_template, request
+from flask import Blueprint, Response, current_app, flash, render_template, request
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -11,6 +12,7 @@ from sqlalchemy import asc, desc, func
 from ..decorators import roles_required
 from ..models import Department, Employee, PayrollRecord, Role
 from ..payroll import PayPeriod, Workweek
+from ..time_review import source_stale_ids
 from ..utils import parse_date, parse_positive_int, store_today
 
 
@@ -21,6 +23,14 @@ def csv_safe(value):
         if value.lstrip().startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n"))
         else value
     )
+
+
+def hours_source(row, stale):
+    if row.legacy_import:
+        return "Imported"
+    if row.id in stale:
+        return "CHANGED"
+    return "Clock" if row.attendance_fingerprint else "Manual"
 
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
@@ -187,6 +197,7 @@ def export_csv():
         query = query.order_by(Employee.last_name, Employee.first_name)
     rows = query.all()
     output = StringIO()
+    stale = source_stale_ids(rows, ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
     writer = csv.writer(output)
     writer.writerow(
         [
@@ -202,6 +213,8 @@ def export_csv():
             "Total Pay",
             "Status",
             "Imported - reconciliation required",
+            "Hours Source",
+            "Clock source changed - reconciliation required",
         ]
     )
     for row in rows:
@@ -219,6 +232,8 @@ def export_csv():
                 f"{row.total_pay:.2f}",
                 row.status,
                 "Yes" if row.legacy_import else "No",
+                hours_source(row, stale),
+                "Yes" if row.id in stale else "No",
             ]
         )
     filename = f"{period}-payroll-report.csv"
@@ -254,6 +269,7 @@ def export_pdf():
 
     rows = query.all()
     buffer = BytesIO()
+    stale = source_stale_ids(rows, ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")))
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     y = height - 0.75 * inch
@@ -270,10 +286,12 @@ def export_pdf():
         "Estimates include unapproved entries; imported rows require reconciliation.",
     )
     y -= 0.35 * inch
-
-    headers = (
-        "Date       Employee             Department     Hours    OT     Total  Status    Imported"
+    pdf.drawString(
+        0.75 * inch, y, "Source CHANGED means clock records require reconciliation before payroll."
     )
+    y -= 0.25 * inch
+
+    headers = "Date       Employee             Department     Hours    OT     Total  Status    Imported Source"
     pdf.setFont("Courier-Bold", 9)
     pdf.drawString(0.75 * inch, y, headers)
     y -= 0.2 * inch
@@ -289,6 +307,7 @@ def export_pdf():
                 f"{(row.employee.department.name if row.employee.department else 'Unassigned')[:12]:12}  "
                 f"{row.hours_worked:5.2f}  {row.overtime_hours:4.2f}  ${row.total_pay:8.2f}"
                 f"  {row.status:8}  {'Yes' if row.legacy_import else 'No'}"
+                f"  {hours_source(row, stale)}"
             )
             pdf.drawString(0.75 * inch, y, line)
             y -= 0.18 * inch

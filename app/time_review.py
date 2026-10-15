@@ -188,12 +188,37 @@ def time_preview(employee, week, zone, today):
 def source_stale_ids(records, zone):
     from .scheduling import monday
 
-    cache, stale = {}, set()
-    for record in records:
-        if record.attendance_fingerprint:
-            key = (record.employee_id, monday(record.work_date))
-            if key not in cache:
-                cache[key] = punch_signature(*key, zone)
-            if cache[key] != record.attendance_fingerprint:
-                stale.add(record.id)
-    return stale
+    sourced = [row for row in records if row.attendance_fingerprint]
+    if not sourced:
+        return set()
+    keys = {(row.employee_id, monday(row.work_date)) for row in sourced}
+    first = day_boundary(min(week for _, week in keys), zone)
+    last = day_boundary(max(week for _, week in keys) + timedelta(days=7), zone)
+    people = sorted({person for person, _ in keys})
+    punches = {}
+    for offset in range(0, len(people), 500):
+        rows = (
+            Attendance.query.filter(
+                Attendance.employee_id.in_(people[offset : offset + 500]),
+                Attendance.clock_in_at < last,
+                db.or_(Attendance.clock_out_at.is_(None), Attendance.clock_out_at > first),
+            )
+            .order_by(Attendance.id)
+            .all()
+        )
+        for row in rows:
+            punches.setdefault(row.employee_id, []).append(row)
+    cache = {}
+    for person, week in keys:
+        start, end = day_boundary(week, zone), day_boundary(week + timedelta(days=7), zone)
+        relevant = [
+            row
+            for row in punches.get(person, [])
+            if row.clock_in_at < end and (row.clock_out_at is None or row.clock_out_at > start)
+        ]
+        cache[(person, week)] = punch_signature(person, week, zone, relevant)
+    return {
+        row.id
+        for row in sourced
+        if cache[(row.employee_id, monday(row.work_date))] != row.attendance_fingerprint
+    }

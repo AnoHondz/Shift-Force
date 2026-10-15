@@ -1,13 +1,16 @@
 """Meaningful planning/privacy, coverage and punch reconciliation regressions."""
 
+import csv
 import json
 import re
 from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
+from io import StringIO
 from zoneinfo import ZoneInfo
 
 import pytest
 from conftest import TEST_PASSWORD
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -25,7 +28,7 @@ from app.models import (
 )
 from app.planning import labor_projection
 from app.scheduling import monday
-from app.time_review import time_preview
+from app.time_review import punch_signature, source_stale_ids, time_preview
 from app.utils import store_today
 
 
@@ -586,6 +589,72 @@ def test_new_commands_require_csrf(client, app, setup):
         "/schedule/coverage/1/review",
     ]:
         assert client.post(path).status_code == 400
+
+
+def test_exports_disclose_changed_clock_source_even_after_approval(client, app, setup, monkeypatch):
+    day = setup["week"] - timedelta(days=14)
+    punch_id = make_punch(app, setup["employee_profile_id"], day)
+    login(client)
+    assert prepare(client, setup, day, payroll_preview(client, setup, day)).status_code == 302
+    with app.app_context():
+        record = PayrollRecord.query.one()
+        record.status = "Approved"
+        db.session.get(Attendance, punch_id).clock_out_at = instant(day, 18)
+        db.session.commit()
+    query = dict(start_date=day.isoformat(), end_date=(day + timedelta(days=6)).isoformat())
+    exported = client.get("/reports/export.csv", query_string=query)
+    rows = list(csv.DictReader(StringIO(exported.get_data(as_text=True))))
+    assert len(rows) == 1 and rows[0]["Status"] == "Approved"
+    assert rows[0]["Hours Source"] == "CHANGED"
+    assert rows[0]["Clock source changed - reconciliation required"] == "Yes"
+    labels = []
+    from reportlab.pdfgen.canvas import Canvas
+
+    original = Canvas.drawString
+
+    def capture(canvas, x, y, text, *args, **kwargs):
+        labels.append(text)
+        return original(canvas, x, y, text, *args, **kwargs)
+
+    monkeypatch.setattr(Canvas, "drawString", capture)
+    response = client.get("/reports/export.pdf", query_string=query)
+    assert response.status_code == 200 and response.data.startswith(b"%PDF")
+    assert any("Approved" in label and "CHANGED" in label for label in labels)
+    assert any("reconciliation before payroll" in label for label in labels)
+
+
+def test_source_validation_batches_punch_reads_across_workweeks(app, setup):
+    first = setup["week"] - timedelta(days=35)
+    with app.app_context():
+        employee = db.session.get(Employee, setup["employee_profile_id"])
+        records = []
+        for offset in range(4):
+            day = first + timedelta(days=7 * offset)
+            punch = Attendance(employee=employee, date=day, clock_in_at=instant(day, 9))
+            punch.complete_shift(instant(day, 17))
+            db.session.add(punch)
+            db.session.flush()
+            row = PayrollRecord.build(employee, day, 8)
+            db.session.add(row)
+            row.attendance_fingerprint = punch_signature(
+                employee.id, day, ZoneInfo("America/New_York")
+            )
+            records.append(row)
+        db.session.commit()
+        # Load payroll fields before counting the separate source-validation reads.
+        records = PayrollRecord.query.order_by(PayrollRecord.work_date).all()
+        reads = []
+
+        def count(connection, cursor, statement, parameters, context, many):
+            if "FROM attendance_records" in statement:
+                reads.append(statement)
+
+        event.listen(db.engine, "before_cursor_execute", count)
+        try:
+            assert source_stale_ids(records, ZoneInfo("America/New_York")) == set()
+            assert len(reads) == 1
+        finally:
+            event.remove(db.engine, "before_cursor_execute", count)
 
 
 def test_coverage_lists_are_bounded_but_later_offers_remain_accessible(client, app, setup):
