@@ -332,6 +332,41 @@ def sample_memory(master_pid, stop, samples):
             pass  # A worker may recycle between samples; no invented zero-memory result.
 
 
+def verify_shared_chat_limit(first, prefix, origins, cert=None):
+    """Burst real authenticated requests so a sequential accept loop cannot pin the probe."""
+    clients = []
+    for index in range(31):
+        cookies = CookieJar()
+        for cookie in first.cookies:
+            cookies.set_cookie(copy.copy(cookie))
+        client = StaffClient([origins[index % len(origins)]], cert, cookies)
+        client.csrf = first.csrf
+        clients.append(client)
+
+    def send(item):
+        index, client = item
+        _, headers = client.post(
+            prefix + "/api/chat/messages", dict(body=f"limit-check-{index}"), expected=(201, 429)
+        )
+        return client.last_status, headers["X-Verification-Worker"]
+
+    results = []
+    with ThreadPoolExecutor(max_workers=24) as pool:
+        for attempt in range(3):
+            results.extend(pool.map(send, enumerate(clients if attempt == 0 else clients[:24])))
+            accepted = sum(status == 201 for status, _ in results)
+            workers = {worker for _, worker in results}
+            # Extra sampling must remain denied: never loosen the shared global budget.
+            assert accepted in {29, 30} and any(status == 429 for status, _ in results), (
+                "The actual shared chat limit did not reject excess messages"
+            )
+            if len(workers) == 2:
+                break
+            time.sleep(0.025)
+    assert len(workers) == 2, "The rate-limit probe did not reach both workers"
+    return accepted
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--redis-uri", help="Disposable Redis test DB; never use the production DB")
@@ -497,26 +532,7 @@ def main():
                 limiter_verified = False
                 limiter_accepted = None
                 if production:
-                    # Allow the earlier message's minute window to have expired during a slow run.
-                    # An unshared limiter would accept all31 when split between both processes.
-                    limiter_workers = set()
-                    limiter_accepted = 0
-                    for index in range(31):
-                        _, headers = first.post(
-                            prefix + "/api/chat/messages",
-                            dict(body=f"limit-check-{index}"),
-                            expected=(201, 429),
-                        )
-                        limiter_workers.add(headers["X-Verification-Worker"])
-                        if first.last_status == 429:
-                            break
-                        limiter_accepted += 1
-                    assert limiter_accepted in {29, 30} and first.last_status == 429, (
-                        "The actual shared chat limit did not reject the31st message"
-                    )
-                    assert len(limiter_workers) == 2, (
-                        "The rate-limit probe did not reach both workers"
-                    )
+                    limiter_accepted = verify_shared_chat_limit(first, prefix, origins, cert)
                     limiter_verified = True
                 encryption_key = Fernet.generate_key().decode()
                 archive = root / "completed-workload.enc"
