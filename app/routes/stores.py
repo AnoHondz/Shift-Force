@@ -2,7 +2,6 @@
 
 import re
 import secrets
-import unicodedata
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import (
@@ -18,12 +17,34 @@ from flask import (
 )
 from flask_login import current_user, login_required, login_user
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db, limiter
 from ..models import Employee, Role, Store, User, create_audit_log
-from ..stores import STORE_CODE, hub_url, invite_serializer, store_snapshot
+from ..stores import hub_url, invite_serializer, store_snapshot
 
 stores_bp = Blueprint("stores", __name__)
+
+
+def render_stores(error=None, status=200):
+    stores = (
+        Store.query.filter_by(owner_id=current_user.id).order_by(Store.created_at, Store.id).all()
+    )
+    return render_template(
+        "stores.html",
+        stores=stores,
+        store_error=error,
+        active_page="stores",
+        page_title="My stores",
+    ), status
+
+
+def generate_store_code():
+    for _ in range(8):
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        if not Store.query.filter_by(slug=code).first():
+            return code
+    abort(503, description="Could not generate an available store code. Please try again.")
 
 
 def require_hub_owner():
@@ -70,36 +91,28 @@ def index():
         name = request.form.get("name", "").strip()
         location = request.form.get("location", "").strip()
         slug = request.form.get("slug", "").strip().lower()
-        if not slug:
-            text = (
-                unicodedata.normalize("NFKD", name + " " + location)
-                .encode("ascii", "ignore")
-                .decode()
-                .replace("'", "")
-            )
-            slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60].rstrip("-")
-            if len(slug) < 3:
-                slug = "store-" + secrets.token_hex(4)
         zone = request.form.get("timezone", "America/New_York")
         if (
             not 1 <= len(name) <= 100
             or not 1 <= len(location) <= 160
-            or not STORE_CODE.fullmatch(slug)
+            or (slug and not re.fullmatch(r"[0-9]{6}", slug))
         ):
-            abort(
+            return render_stores(
+                "Enter a business name and location. Store codes must contain exactly six digits.",
                 400,
-                description="Enter a business name, location, and a 3–60 character store code using letters, numbers, and hyphens.",
             )
         try:
             if len(zone) > 64:
                 raise ValueError
             ZoneInfo(zone)
         except (ZoneInfoNotFoundError, ValueError):
-            abort(400, description="Choose a valid time zone.")
+            return render_stores("Choose a valid time zone.", 400)
+        if not slug:
+            slug = generate_store_code()
         if Store.query.filter_by(slug=slug).first():
-            abort(
+            return render_stores(
+                "That store code is already in use. Choose another or select Generate code.",
                 409,
-                description="That store code is already in use. Add a street or location to make it unique.",
             )
         employee = current_user.employee
         owner = dict(
@@ -118,7 +131,16 @@ def index():
             owner_account_id=1,
         )
         db.session.add(store)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            if Store.query.filter_by(slug=slug).first():
+                return render_stores(
+                    "That store code is already in use. Choose another or select Generate code.",
+                    409,
+                )
+            raise
         info = store_snapshot(store)
         router = current_app.extensions["stores"]
         child = router.provision(info, owner)
@@ -134,12 +156,7 @@ def index():
             router.apps[info["database_key"]] = child
         flash("Store ready. Open it to add staff, shifts, and channels.", "success")
         return redirect(url_for("stores.index"))
-    stores = (
-        Store.query.filter_by(owner_id=current_user.id).order_by(Store.created_at, Store.id).all()
-    )
-    return render_template(
-        "stores.html", stores=stores, active_page="stores", page_title="My stores"
-    )
+    return render_stores()
 
 
 @stores_bp.post("/stores/<slug>/open")

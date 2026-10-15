@@ -50,7 +50,12 @@ def store_bundle(tmp_path):
     for index in range(2):
         assert (
             client.post(
-                "/stores", data={"name": "Pilot", "location": f"Location {index}"}
+                "/stores",
+                data={
+                    "name": "Pilot",
+                    "location": f"Location {index}",
+                    "slug": f"12345{index}",
+                },
             ).status_code
             == 302
         )
@@ -203,8 +208,8 @@ def test_health_readiness_and_maintenance_are_data_free(store_bundle):
 
 def test_store_owner_can_manage_access_with_hub_password(store_bundle):
     app, client, _, password = store_bundle
-    client.post("/stores/pilot-location-0/open")
-    child = app.extensions["stores"].get_app("pilot-location-0")
+    client.post("/stores/123450/open")
+    child = app.extensions["stores"].get_app("123450")
     with child.app_context():
         person = User(
             username="crew",
@@ -216,7 +221,7 @@ def test_store_owner_can_manage_access_with_hub_password(store_bundle):
         db.session.commit()
         person_id = person.id
     response = client.post(
-        "/s/pilot-location-0/account/staff",
+        "/s/123450/account/staff",
         data={
             "user_id": person_id,
             "action": "role",
@@ -231,7 +236,7 @@ def test_store_owner_can_manage_access_with_hub_password(store_bundle):
         owner = User.query.filter_by(username="owner").one()
         owner.revoke_sessions()
         db.session.commit()
-    assert client.get("/s/pilot-location-0/account/staff").status_code == 302
+    assert client.get("/s/123450/account/staff").status_code == 302
 
 
 def production_readiness(app, root):

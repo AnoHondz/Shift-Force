@@ -1,5 +1,11 @@
 # Verification record
 
+## Six-digit location codes - October 15, 2026
+
+Owners choose a six-digit code or generate a random one; leaving it blank also generates one on the server. Leading zeros are preserved. Existing named location codes and links still work. Taken codes preserve the submitted form, and generated candidates retry collisions. Codes locate a workplace; individual invitations still control staff membership.
+
+Focused verification passed **79 tests** across store membership/isolation, account/store security and operations/backup workflows. Cases include leading-zero lookup, protected signup, duplicate form preservation, invalid code lengths/characters, random collision retry, numeric boundaries and compatibility with existing named codes. Chromium passed **32 workflows with zero browser errors**, including custom/generated six-digit codes, regeneration, public code lookup, owner entry, invitations, cross-location isolation and the mobile generator layout. Ruff lint and formatting passed. The existing local demo was restarted and its readiness and updated generator asset verified. Automated workflows used disposable databases; no production deployment or new hosted CI run is claimed.
+
 ## Researched planning upgrade — October 15, 2026
 
 The [product research](PRODUCT_RESEARCH.md) compares nine products using primary product/support documentation and records the selected scope and engineering references. The implemented balanced upgrade covers scheduling, coworker coverage and actual-hour payroll review. Public infrastructure, provider integration and legal payroll approval remain separate operator work.

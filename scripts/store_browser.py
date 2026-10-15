@@ -1,5 +1,6 @@
 """Exercise actual store provisioning, owner entry and staff invitations in Chromium."""
 
+import re
 import secrets
 
 from playwright.sync_api import expect
@@ -28,17 +29,32 @@ def verify_stores(page, browser, origin, app, completed, capture, browser_errors
     expect(page.get_by_role("link", name="Team chat", exact=True)).to_have_count(0)
     assert page.request.get(origin + "/api/employees").status == 403
     completed.append("Owner signup reaches My stores and cannot read the shared hub workplace")
+    codes = []
     for index, location in enumerate(["Broad Street", "Cox Street"]):
         if index:
             page.locator(".add-store > summary").click()
         page.get_by_label("Business name", exact=True).fill("McDonald's")
         page.get_by_label("Location", exact=True).fill(location)
+        code_field = page.get_by_label("Store code", exact=True)
+        if index:
+            page.get_by_role("button", name="Generate code", exact=True).click()
+            previous = code_field.input_value()
+            page.get_by_role("button", name="Generate code", exact=True).click()
+            code = code_field.input_value()
+            assert code != previous and re.fullmatch(r"[0-9]{6}", code)
+        else:
+            code = "004829"
+            code_field.fill(code)
+        codes.append(code.lower())
         page.get_by_role("button", name="Create store", exact=True).click()
         expect(page.get_by_role("button", name="Open " + location, exact=True)).to_be_visible()
+        expect(page.locator(".store-code").filter(has_text=code.lower())).to_be_visible()
+    completed.append(
+        "Custom six-digit store codes preserve leading zeros; generated codes can be regenerated"
+    )
     capture(page, "my-stores")
     page.get_by_role("button", name="Open Broad Street", exact=True).click()
-    broad = "/s/mcdonalds-broad-street"
-    cox = "/s/mcdonalds-cox-street"
+    broad, cox = ["/s/" + code for code in codes]
     expect(page).to_have_url(origin + broad + "/dashboard")
     expect(page.locator(".brand-caption")).to_have_text("Broad Street")
     page.goto(origin + broad + "/employees/new")
@@ -52,7 +68,7 @@ def verify_stores(page, browser, origin, app, completed, capture, browser_errors
     }.items():
         page.get_by_label(label, exact=True).fill(value)
     page.get_by_role("button", name="Save Employee", exact=True).click()
-    child = app.extensions["stores"].get_app("mcdonalds-broad-street")
+    child = app.extensions["stores"].get_app(codes[0])
     with child.app_context():
         employee_id = Employee.query.filter_by(email="jordan@example.com").one().id
     page.goto(origin + broad + f"/employees/{employee_id}")
@@ -122,7 +138,7 @@ def verify_stores(page, browser, origin, app, completed, capture, browser_errors
         visitor = visitor_context.new_page()
         visitor.on("pageerror", lambda error: browser_errors.append(str(error)))
         visitor.goto(origin + "/stores/find")
-        visitor.get_by_label("Search stores", exact=True).fill("McDonald's Broad Street")
+        visitor.get_by_label("Search stores", exact=True).fill(codes[0].upper())
         visitor.get_by_role("button", name="Find store", exact=True).click()
         expect(visitor.locator(".store-result")).to_have_count(1)
         capture(visitor, "find-store")
@@ -132,6 +148,14 @@ def verify_stores(page, browser, origin, app, completed, capture, browser_errors
         capture(visitor, "store-login")
         page.get_by_role("link", name="My stores", exact=True).click()
         page.set_viewport_size({"width": 390, "height": 844})
+        page.locator(".add-store > summary").click()
+        page.get_by_label("Business name", exact=True).fill("Sweet Frog")
+        page.get_by_label("Location", exact=True).fill("Glen Allen")
+        page.get_by_role("button", name="Generate code", exact=True).click()
+        assert re.fullmatch(
+            r"[0-9]{6}",
+            page.get_by_label("Store code", exact=True).input_value(),
+        )
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         capture(page, "my-stores-mobile")
         visitor.set_viewport_size({"width": 390, "height": 844})

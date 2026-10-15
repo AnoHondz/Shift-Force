@@ -14,9 +14,9 @@ def test_staff_recovery_link_is_private_to_its_store(client, app, locations):
     broad, cox = locations
     add_staff(broad, "Broad Coworker", "crew")
     add_staff(cox, "Cox Coworker", "crew")
-    a = "/s/mcdonalds-broad-street"
-    b = "/s/mcdonalds-cox-street"
-    client.post("/stores/mcdonalds-broad-street/open")
+    a = "/s/123456"
+    b = "/s/654321"
+    client.post("/stores/123456/open")
     response = client.post(
         a + "/account/staff",
         data={"user_id": 2, "action": "reset", "current_password": TEST_PASSWORD},
@@ -45,7 +45,7 @@ def test_store_owner_security_redirect_keeps_the_request_hub_prefix(locations):
     with broad.test_request_context(
         "/account/security",
         environ_overrides={
-            "SCRIPT_NAME": "/portal/s/mcdonalds-broad-street",
+            "SCRIPT_NAME": "/portal/s/123456",
             "shiftspace.hub_prefix": "/portal",
         },
     ):

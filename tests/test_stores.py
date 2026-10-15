@@ -17,8 +17,8 @@ def locations(app, client, users, tmp_path):
     )
     client.post("/login", data={"username": "admin_user", "password": TEST_PASSWORD})
     for location, slug in [
-        ("Broad Street", "mcdonalds-broad-street"),
-        ("Cox Street", "mcdonalds-cox-street"),
+        ("Broad Street", "123456"),
+        ("Cox Street", "654321"),
     ]:
         response = client.post(
             "/stores",
@@ -31,8 +31,8 @@ def locations(app, client, users, tmp_path):
         )
         assert response.status_code == 302
     router = app.extensions["stores"]
-    broad = router.get_app("mcdonalds-broad-street")
-    cox = router.get_app("mcdonalds-cox-street")
+    broad = router.get_app("123456")
+    cox = router.get_app("654321")
     yield broad, cox
     for child in router.apps.values():
         with child.app_context():
@@ -86,8 +86,8 @@ def test_planning_availability_and_clock_review_stay_inside_the_selected_store(
             punch.complete_shift(start + timedelta(hours=hours))
             db.session.add(punch)
             db.session.commit()
-    a, b = "/s/mcdonalds-broad-street", "/s/mcdonalds-cox-street"
-    client.post("/stores/mcdonalds-broad-street/open")
+    a, b = "/s/123456", "/s/654321"
+    client.post("/stores/123456/open")
     response = client.post(
         a + "/schedule",
         data=dict(
@@ -106,7 +106,7 @@ def test_planning_availability_and_clock_review_stay_inside_the_selected_store(
     assert (a + "/schedule/publish").encode() in client.get(
         a + "/schedule?week=" + future.isoformat()
     ).data
-    client.post("/stores/mcdonalds-cox-street/open")
+    client.post("/stores/654321/open")
     assert b"Broad private draft" not in client.get(b + "/schedule?week=" + future.isoformat()).data
     staff = app.test_client()
     staff.post(a + "/login", data=dict(username="crew", password=TEST_PASSWORD))
@@ -129,8 +129,8 @@ def test_owner_can_switch_between_private_locations(app, client, locations):
     assert broad.config["SQLALCHEMY_DATABASE_URI"] != cox.config["SQLALCHEMY_DATABASE_URI"]
     assert broad.secret_key != cox.secret_key != app.secret_key
     for slug, expected, absent in [
-        ("mcdonalds-broad-street", b"Broad Coworker", b"Cox Coworker"),
-        ("mcdonalds-cox-street", b"Cox Coworker", b"Broad Coworker"),
+        ("123456", b"Broad Coworker", b"Cox Coworker"),
+        ("654321", b"Cox Coworker", b"Broad Coworker"),
     ]:
         response = client.post(f"/stores/{slug}/open")
         assert response.status_code == 302 and response.location == f"/s/{slug}/dashboard"
@@ -146,8 +146,8 @@ def test_hub_and_store_cookies_cannot_authenticate_other_locations(app, client, 
     broad, cox = locations
     add_staff(broad, username="crew")
     add_staff(cox, username="crew")
-    a = "/s/mcdonalds-broad-street"
-    b = "/s/mcdonalds-cox-street"
+    a = "/s/123456"
+    b = "/s/654321"
     assert client.get(a + "/api/chat/messages").status_code == 401
     response = client.post(
         a + "/login", data={"username": "crew", "password": TEST_PASSWORD, "remember_me": "on"}
@@ -173,8 +173,8 @@ def test_store_registration_requires_location_bound_invite(client, locations):
     add_staff(cox)
     with broad.app_context():
         token = invite_serializer().dumps({"employee_id": employee_id})
-    a = "/s/mcdonalds-broad-street"
-    b = "/s/mcdonalds-cox-street"
+    a = "/s/123456"
+    b = "/s/654321"
     assert client.get(a + "/signup").status_code == 403
     assert client.get(b + "/signup?invite=" + token).status_code == 403
     assert client.get(a + "/signup?invite=" + token + "tampered").status_code == 403
@@ -206,7 +206,7 @@ def test_store_registration_requires_location_bound_invite(client, locations):
 def test_store_assets_and_redirects_stay_under_location(client, locations):
     broad, _ = locations
     add_staff(broad, username="crew")
-    prefix = "/s/mcdonalds-broad-street"
+    prefix = "/s/123456"
     response = client.get(prefix + "/chat")
     assert response.status_code == 302 and response.location.startswith(prefix + "/login")
     response = client.post(
@@ -219,7 +219,7 @@ def test_store_assets_and_redirects_stay_under_location(client, locations):
     assert client.get(prefix + "/static/data/emoji.json").status_code == 200
     client.post(prefix + "/logout")
     response = client.post(
-        prefix + "/login?next=/s/mcdonalds-cox-street/chat",
+        prefix + "/login?next=/s/654321/chat",
         data={"username": "crew", "password": TEST_PASSWORD},
     )
     assert response.location == prefix + "/employee/dashboard"
@@ -228,14 +228,14 @@ def test_store_assets_and_redirects_stay_under_location(client, locations):
 def test_staff_cannot_create_stores_or_invite_colleagues(client, locations):
     broad, _ = locations
     employee_id = add_staff(broad, username="crew")
-    prefix = "/s/mcdonalds-broad-street"
+    prefix = "/s/123456"
     client.post(prefix + "/login", data={"username": "crew", "password": TEST_PASSWORD})
     assert client.get(prefix + "/stores").status_code == 404
     assert client.post(prefix + f"/employees/{employee_id}/invite").status_code == 403
     client.post("/logout")
     client.post("/login", data={"username": "employee_user", "password": TEST_PASSWORD})
     assert client.get("/stores").status_code == 403
-    assert client.post("/stores/mcdonalds-broad-street/open").status_code == 403
+    assert client.post("/stores/123456/open").status_code == 403
 
 
 def test_nonowner_admin_cannot_open_someone_elses_store(app, client, locations):
@@ -247,7 +247,7 @@ def test_nonowner_admin_cannot_open_someone_elses_store(app, client, locations):
     client.post("/logout")
     client.post("/login", data={"username": "other.owner", "password": TEST_PASSWORD})
     assert b'<article class="surface-card store-card"' not in client.get("/stores").data
-    assert client.post("/stores/mcdonalds-broad-street/open").status_code == 404
+    assert client.post("/stores/123456/open").status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -261,8 +261,8 @@ def test_find_store_exposes_only_location_labels(client, locations):
     response = client.get("/stores/find?q=McDonald%27s+Broad")
     assert b"Broad Street" in response.data and b"Cox Street" not in response.data
     assert b"crew@example.com" not in response.data and b"Hourly rate" not in response.data
-    assert b"/s/mcdonalds-broad-street/login" in response.data
-    assert b"/s/mcdonalds-broad-street/login" not in client.get("/stores/find?q=%25").data
+    assert b"/s/123456/login" in response.data
+    assert b"/s/123456/login" not in client.get("/stores/find?q=%25").data
 
 
 @pytest.mark.parametrize(
@@ -270,6 +270,10 @@ def test_find_store_exposes_only_location_labels(client, locations):
     [
         {"slug": "../../other"},
         {"slug": "a"},
+        {"slug": "12345"},
+        {"slug": "1234567"},
+        {"slug": "abc123"},
+        {"slug": "１２３４５６"},
         {"name": ""},
         {"location": ""},
         {"timezone": "not-a-zone"},
@@ -282,7 +286,7 @@ def test_invalid_store_creation_is_atomic(app, client, users, tmp_path, fields):
     data = {
         "name": "Example store",
         "location": "Broad Street",
-        "slug": "example-broad",
+        "slug": "482913",
         "timezone": "America/New_York",
         **fields,
     }
@@ -301,11 +305,14 @@ def test_duplicate_code_preserves_existing_store(app, client, locations):
         data={
             "name": "Another brand",
             "location": "Elsewhere",
-            "slug": "mcdonalds-broad-street",
+            "slug": "123456",
             "timezone": "UTC",
         },
     )
     assert response.status_code == 409 and path.read_bytes() == original
+    assert b'value="Another brand"' in response.data
+    assert b'value="Elsewhere"' in response.data
+    assert b"Generate code" in response.data
     with app.app_context():
         assert Store.query.count() == 2
 
@@ -315,16 +322,11 @@ def test_owner_entry_and_staff_invites_require_each_locations_csrf(app, client, 
     employee_id = add_staff(broad)
     app.config["WTF_CSRF_ENABLED"] = True
     broad.config["WTF_CSRF_ENABLED"] = True
-    assert client.post("/stores/mcdonalds-broad-street/open").status_code == 400
+    assert client.post("/stores/123456/open").status_code == 400
     page = client.get("/stores")
     root_token = re.search(rb'name="csrf_token" value="([^"]+)"', page.data).group(1).decode()
-    assert (
-        client.post(
-            "/stores/mcdonalds-broad-street/open", data={"csrf_token": root_token}
-        ).status_code
-        == 302
-    )
-    prefix = "/s/mcdonalds-broad-street"
+    assert client.post("/stores/123456/open", data={"csrf_token": root_token}).status_code == 302
+    prefix = "/s/123456"
     path = prefix + f"/employees/{employee_id}/invite"
     assert client.post(path, data={"csrf_token": root_token}).status_code == 400
     page = client.get(prefix + f"/employees/{employee_id}")
@@ -341,7 +343,7 @@ def test_expired_and_archived_invitations_cannot_create_accounts(client, locatio
         patched.setattr(TimestampSigner, "get_timestamp", lambda self: int(time.time()) - 8 * 86400)
         with broad.app_context():
             expired = invite_serializer().dumps({"employee_id": employee_id})
-    prefix = "/s/mcdonalds-broad-street"
+    prefix = "/s/123456"
     assert client.get(prefix + "/signup?invite=" + expired).status_code == 403
     with broad.app_context():
         active = invite_serializer().dumps({"employee_id": employee_id})
@@ -364,13 +366,108 @@ def test_automatic_store_code_and_location_timezone(app, client, users, tmp_path
         ).status_code
         == 302
     )
-    child = app.extensions["stores"].get_app("chick-fil-a-cox-street")
+    with app.app_context():
+        code = Store.query.one().slug
+        assert re.fullmatch(r"[0-9]{6}", code)
+    child = app.extensions["stores"].get_app(code)
     with child.app_context():
         from app.routes.workplace import parse_shift_time
 
         assert parse_shift_time("2026-01-15T09:00").isoformat() == "2026-01-15T17:00:00"
         db.session.remove()
         db.engine.dispose()
+
+
+def test_custom_store_code_is_searchable_and_does_not_allow_uninvited_signup(
+    app, client, users, tmp_path
+):
+    app.config["STORE_DATABASE_ROOT"] = str(tmp_path / "stores")
+    client.post("/login", data=dict(username="admin_user", password=TEST_PASSWORD))
+    response = client.post(
+        "/stores",
+        data=dict(name="Sweet Frog", location="Glen Allen", slug="004829"),
+    )
+    assert response.status_code == 302
+    assert b"004829" in client.get("/stores").data
+    client.post("/logout")
+    found = client.get("/stores/find", query_string=dict(q="004829"))
+    assert b"/s/004829/login" in found.data
+    assert client.get("/s/004829/signup").status_code == 403
+    assert client.get("/s/004829/api/employees").status_code == 401
+    for child in app.extensions["stores"].apps.values():
+        with child.app_context():
+            db.session.remove()
+            db.engine.dispose()
+
+
+def test_generated_codes_allow_identically_named_locations(app, client, users, tmp_path):
+    app.config["STORE_DATABASE_ROOT"] = str(tmp_path / "stores")
+    client.post("/login", data=dict(username="admin_user", password=TEST_PASSWORD))
+    for _ in range(2):
+        assert (
+            client.post("/stores", data=dict(name="Sweet Frog", location="Glen Allen")).status_code
+            == 302
+        )
+    with app.app_context():
+        stores = Store.query.all()
+        codes = [store.slug for store in stores]
+        assert len(codes) == len(set(codes)) == 2
+        assert all(re.fullmatch(r"[0-9]{6}", code) for code in codes)
+        assert len({store.database_key for store in stores}) == 2
+    for child in app.extensions["stores"].apps.values():
+        with child.app_context():
+            db.session.remove()
+            db.engine.dispose()
+
+
+def test_generated_code_retries_a_taken_code(app, users, monkeypatch):
+    from app.routes.stores import generate_store_code
+
+    with app.app_context():
+        db.session.add(
+            Store(
+                owner_id=users["admin_id"],
+                name="Sweet Frog",
+                location="Glen Allen",
+                slug="000000",
+                database_key="a" * 32,
+                timezone="UTC",
+                owner_account_id=1,
+            )
+        )
+        db.session.commit()
+        numbers = iter([0, 42])
+        monkeypatch.setattr("app.routes.stores.secrets.randbelow", lambda _: next(numbers))
+        assert generate_store_code() == "000042"
+
+
+@pytest.mark.parametrize("number", [0, 999999])
+def test_generated_codes_preserve_six_digits(app, monkeypatch, number):
+    from app.routes.stores import generate_store_code
+    from app.stores import STORE_CODE
+
+    monkeypatch.setattr("app.routes.stores.secrets.randbelow", lambda _: number)
+    with app.app_context():
+        code = generate_store_code()
+        assert STORE_CODE.fullmatch(code)
+        assert code == f"{number:06d}"
+
+
+def test_existing_named_code_still_opens_its_location(app, client, locations):
+    broad, _ = locations
+    info = broad.config["STORE_INFO"]
+    with broad.app_context():
+        db.session.remove()
+        db.engine.dispose()
+    router = app.extensions["stores"]
+    router.apps.pop(info["database_key"])
+    with app.app_context():
+        store = Store.query.filter_by(slug="123456").one()
+        store.slug = "sweetfrogglennallen"
+        db.session.commit()
+    assert client.get("/s/sweetfrogglennallen/login").status_code == 200
+    assert client.post("/stores/sweetfrogglennallen/open").status_code == 302
+    assert client.get("/s/sweetfrogglennallen/employees").status_code == 200
 
 
 def test_provision_failure_does_not_publish_location(app, client, users, tmp_path, monkeypatch):
@@ -397,8 +494,8 @@ def test_starting_existing_store_does_not_migrate_or_seed(app, client, locations
         raise AssertionError("Startup must not run migrations.")
 
     monkeypatch.setattr("app.stores.upgrade", forbidden)
-    assert client.get("/s/mcdonalds-broad-street/login").status_code == 200
-    with router.get_app("mcdonalds-broad-street").app_context():
+    assert client.get("/s/123456/login").status_code == 200
+    with router.get_app("123456").app_context():
         assert User.query.count() == 1
 
 
@@ -438,8 +535,8 @@ def test_owner_signup_is_restricted_to_own_locations(app, client, locations):
         assert User.query.filter_by(username="separate.owner").one().role == Role.OWNER
     response = client.post("/login", data={"username": "separate.owner", "password": TEST_PASSWORD})
     assert response.location == "/stores"
-    assert b"/stores/mcdonalds-broad-street/open" not in client.get("/stores").data
-    assert client.post("/stores/mcdonalds-broad-street/open").status_code == 404
+    assert b"/stores/123456/open" not in client.get("/stores").data
+    assert client.post("/stores/123456/open").status_code == 404
     for path in [
         "/employees",
         "/team",
@@ -458,9 +555,11 @@ def test_owner_signup_is_restricted_to_own_locations(app, client, locations):
         client.post("/stores", data={"name": "Chick-fil-A", "location": "Broad Street"}).status_code
         == 302
     )
-    assert client.post("/stores/chick-fil-a-broad-street/open").status_code == 302
-    assert client.get("/s/chick-fil-a-broad-street/employees").status_code == 200
-    assert client.get("/s/mcdonalds-broad-street/api/chat/messages").status_code == 401
+    with app.app_context():
+        code = Store.query.filter_by(name="Chick-fil-A").one().slug
+    assert client.post(f"/stores/{code}/open").status_code == 302
+    assert client.get(f"/s/{code}/employees").status_code == 200
+    assert client.get("/s/123456/api/chat/messages").status_code == 401
     page = client.get("/stores").data
     assert b"My stores" in page and b"Team chat</a>" not in page
 
@@ -469,7 +568,7 @@ def test_owner_signup_can_be_disabled_and_never_runs_inside_store(app, client, l
     client.post("/logout")
     app.config["PUBLIC_STORE_OWNER_REGISTRATION"] = False
     assert client.get("/owner/signup").status_code == 403
-    assert client.get("/s/mcdonalds-broad-street/owner/signup").status_code == 403
+    assert client.get("/s/123456/owner/signup").status_code == 403
 
 
 def test_store_login_limits_are_separate(app, client, locations):
@@ -480,8 +579,8 @@ def test_store_login_limits_are_separate(app, client, locations):
             db.session.remove()
             db.engine.dispose()
     router.apps.clear()
-    a = "/s/mcdonalds-broad-street/login"
-    b = "/s/mcdonalds-cox-street/login"
+    a = "/s/123456/login"
+    b = "/s/654321/login"
     for _ in range(10):
         assert client.post(a, data={"username": "missing"}).status_code == 200
     assert client.post(a, data={"username": "missing"}).status_code == 429
@@ -494,9 +593,9 @@ def test_schedule_builder_cannot_read_or_modify_other_location(client, locations
     broad, cox = locations
     add_staff(broad, "Broad Coworker", "crew")
     add_staff(cox, "Cox Coworker", "crew")
-    client.post("/stores/mcdonalds-broad-street/open")
+    client.post("/stores/123456/open")
     response = client.post(
-        "/s/mcdonalds-broad-street/schedule",
+        "/s/123456/schedule",
         data={
             "employee_id": "2",
             "simple_schedule": "1",
@@ -508,9 +607,9 @@ def test_schedule_builder_cannot_read_or_modify_other_location(client, locations
         },
     )
     assert response.status_code == 302
-    assert response.location.startswith("/s/mcdonalds-broad-street/schedule?week=")
-    client.post("/stores/mcdonalds-cox-street/open")
-    page = client.get("/s/mcdonalds-cox-street/schedule?week=2026-10-19")
+    assert response.location.startswith("/s/123456/schedule?week=")
+    client.post("/stores/654321/open")
+    page = client.get("/s/654321/schedule?week=2026-10-19")
     assert b"Broad-only planned coverage" not in page.data and b"Broad Coworker" not in page.data
     with broad.app_context():
         assert ScheduledShift.query.count() == 2
