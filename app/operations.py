@@ -16,7 +16,7 @@ from .extensions import db
 from .models import Store
 
 ops_bp = Blueprint("ops", __name__)
-SCHEMA_HEAD = "0006_operations"
+SCHEMA_HEAD = "0007_planning"
 
 
 def data_root(app=None):

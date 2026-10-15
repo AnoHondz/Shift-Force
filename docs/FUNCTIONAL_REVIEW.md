@@ -2,6 +2,8 @@
 
 The review covered the current workforce workflows and the production-readiness changes for a Virginia pilot of 1–5 stores and up to 100 staff. The local app runs at `http://127.0.0.1:5000`. Public hosting and real payroll/incident sign-offs have not been performed.
 
+The October 15 researched upgrade extends this review with private drafts/publication, atomic week copying, employee availability, independently approved coverage, planned labor estimates, personal calendars and sourced clock-hour preparation. [PRODUCT_RESEARCH.md](PRODUCT_RESEARCH.md) records nine product comparisons, primary sources, accepted business rules and future dependencies; [BUSINESS_RULES.md](BUSINESS_RULES.md#researched-planning-and-actual-hour-review) defines current behavior. See the latest verification section for executed results.
+
 ## Findings corrected
 
 | Severity | Problem and effect | Correction |
@@ -23,9 +25,10 @@ The review covered the current workforce workflows and the production-readiness 
 
 | Function | Verified behavior | Practical boundary |
 | --- | --- | --- |
-| Clock in/out | Uses the signed-in employee, server time and UTC storage; concurrent duplicate starts create one active punch. | Clocking does not create or approve payroll automatically. |
+| Clock in/out | Uses the signed-in employee, server time and UTC storage; concurrent duplicate starts create one active punch. | Clocking does not create or approve payroll automatically. Review clock hours provides an explicit, confirmed pending-timesheet preparation step. |
 | Punch corrections | Manager access, required reason, before/after audit, overlap and stale-version checks. | Corrected punches still need review against the submitted daily timesheet. |
-| Schedule | Person/day/time form, atomic multi-day saves, approved-time-off and overlap checks, overnight/DST handling, edits/cancellation, private notifications. | Saved shifts appear immediately; notifications are in-app, without push/SMS/email delivery. |
+| Schedule | Person/day/time form, private drafts, atomic filtered publication/week copying, submitted availability/leave/overlap checks, overnight/DST handling, estimates and calendar downloads. | Save shift shares immediately; new drafts remain private. No demand forecasting or automatic staffing decisions. Calendar downloads are snapshots; notices are in-app. |
+| Shift coverage | Employee offers, one pending claimant, independently approved reassignment, fresh conflict checks, versions, atomic notices/audits and paginated store board. | Original employee remains responsible until approval. No two-way trades or manager-created unassigned shifts. |
 | Staff accounts | Owner password confirmation, bounded staff roles, session removal, store-bound single-use 30-minute recovery links. | Lost owner credentials/authenticator recovery require trusted server access and identity verification. |
 | MFA | Encrypted secrets, authenticator enrollment, one-use recovery codes, atomic replay rejection; privileged production enrollment required. | Actual staff must enroll their own authenticator and retain recovery codes. |
 | Payroll | Decimal snapshots, weekly allocation, versioned approvals, disclosed estimate/import status and owner policy evidence. | Eligibility is an owner attestation that must remain current; no automatic classification, cross-location detection, review expiry, tips, bonuses, deductions, taxes, payment processing or legal certification. Staff working across locations need external payroll. |

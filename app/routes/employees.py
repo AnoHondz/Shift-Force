@@ -596,6 +596,7 @@ def payroll():
             )
         if record:
             record.hours_worked = hours_worked
+            record.attendance_fingerprint = None
             record.notes = notes
             record.status = "Pending"
             record.reviewed_by_id = None
@@ -618,7 +619,7 @@ def payroll():
             "payroll_created",
             "PayrollRecord",
             str(record.id),
-            f"Payroll entry for {employee.full_name()} on {work_date}: hours {previous_hours} → {hours_worked}; weekly allocation recalculated.",
+            f"Payroll entry for {employee.full_name()} on {work_date}: hours {previous_hours} → {hours_worked}; weekly allocation recalculated. Source: manual hours; any prior clock-source link cleared.",
         )
         if admin_mode:
             if employee.user:
@@ -673,6 +674,8 @@ def payroll():
         page=page, per_page=per_page, error_out=False
     )
     records = pagination.items
+    from ..time_review import source_stale_ids
+    from .workplace import workplace_zone
 
     summary = {
         "hours": float(totals[0]),
@@ -693,12 +696,16 @@ def payroll():
         per_page=per_page,
         admin_view=admin_mode,
         store_today=store_today().isoformat(),
+        punch_stale=source_stale_ids(records, workplace_zone()),
     )
 
 
 @employee_bp.route("/payroll/<int:record_id>/review", methods=("POST",))
 @roles_required(*Role.PAYROLL_REVIEW)
 def review_payroll(record_id):
+    from ..time_review import serialize_command
+
+    serialize_command()
     record = db.get_or_404(PayrollRecord, record_id)
     if record.employee_id == current_user.employee_id or record.legacy_import:
         abort(403, description="You cannot review your own or an imported timesheet.")

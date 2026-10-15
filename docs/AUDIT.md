@@ -2,6 +2,8 @@
 
 The reviewed project comprised configuration/startup, the ORM and all route blueprints, shared utilities/decorators, Jinja templates/CSS, original tests, schema SQL, tracked artifacts, and five original Git commits. Existing Flask, SQLite, Jinja, Bootstrap, reporting, and role workflows were retained.
 
+The October 15 planning upgrade adds researched private publication, week reuse, employee availability/coverage, planned costs, calendars and sourced clock-hour preparation. See [PRODUCT_RESEARCH.md](PRODUCT_RESEARCH.md) for primary comparisons and tradeoffs, and [VERIFICATION.md](VERIFICATION.md) for the 381-test/31-browser-workflow execution record. This extends the existing architecture rather than replacing it.
+
 | Finding | Change / remaining implication |
 |---|---|
 | Hardcoded fallback Flask/admin secrets and signup codes | Removed; required environment secret and explicit CLI account provisioning |

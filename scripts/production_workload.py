@@ -263,6 +263,18 @@ def staff_workflow(credential, password, origins, cert, production, markers):
         message["body"].startswith("private-" + credential["slug"][-1] + "-")
         for message in messages
     )
+    client.page(prefix + "/schedule/availability")
+    client.post(
+        prefix + "/schedule/availability",
+        {"version_id": "0", **{f"mode_{day}": "any" for day in range(7)}},
+    )
+    client.page(prefix + "/schedule/coverage")
+    personal_calendar, _ = client.request(prefix + "/schedule/calendar.ics?week=2026-10-19")
+    assert credential["marker"] in personal_calendar
+    assert all(
+        marker not in personal_calendar for marker in markers if marker != credential["marker"]
+    )
+    client.page(prefix + "/payroll/clock-hours")
     return client, credential
 
 
@@ -295,6 +307,9 @@ def verify_databases(root, expected_records=100):
             count = connection.execute("SELECT COUNT(*) FROM attendance_records").fetchone()[0]
             records += count
             assert connection.execute("SELECT COUNT(*) FROM scheduled_shifts").fetchone()[0] == 20
+            assert (
+                connection.execute("SELECT COUNT(*) FROM availability_profiles").fetchone()[0] == 20
+            )
             assert connection.execute("SELECT COUNT(*) FROM payroll_records").fetchone()[0] == 0
     assert records == expected_records, (
         f"Expected {expected_records} completed punches, got {records}"
@@ -534,6 +549,7 @@ def main():
                     peak_server_rss_mb=round(max(memory_samples), 1) if memory_samples else None,
                     restored_databases=len(manifest["files"]),
                     completed_punches=101,
+                    availability_profiles_verified=100,
                     total_seconds=round(time.monotonic() - started, 2),
                     limits="Synthetic loopback workload; no hosted-network, long soak, or outage evidence.",
                 )

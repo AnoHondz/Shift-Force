@@ -1,5 +1,31 @@
 # Verification record
 
+## Researched planning upgrade — October 15, 2026
+
+The [product research](PRODUCT_RESEARCH.md) compares nine products using primary product/support documentation and records the selected scope and engineering references. The implemented balanced upgrade covers scheduling, coworker coverage and actual-hour payroll review. Public infrastructure, provider integration and legal payroll approval remain separate operator work.
+
+| Check | Observed current result |
+| --- | --- |
+| Complete local Pytest run | **381 passed, 0 failed**, 262.65 seconds; 9 dependency deprecation warnings from Flask-Login cookie expiry |
+| Ruff | Lint passed; **87 Python files** passed formatting |
+| Bandit | 0 unsuppressed findings; existing two annotated validation-message false positives |
+| Runtime dependency audit | No known vulnerabilities reported for the installed platform's pinned runtime requirements; hosted CI also audits Linux-only Gunicorn |
+| Chromium | **31 workflows passed, 0 unexpected browser errors**; 45 real captures retained, including 9 new availability/draft/coverage/week-tools/clock-review images |
+| Copy-first live-demo upgrade | Hub and two store copies migrated to `0007_planning` with every preexisting column value retained |
+| Existing local app | Writers stopped, fresh backups retained, all three databases upgraded, original values/passwords preserved, table fingerprints matched across restart; readiness and sign-in HTTP 200 |
+| Two-process Windows workload | Five stores, 100 synthetic staff, 24 concurrent clients, **1,500 base requests in 15.44 seconds**, p95 **0.719 seconds**, 101 completed punches, 100 self-owned availability profiles, six databases restored with exact table/row equality |
+| Official Render Blueprint schema | Passed without creating resources |
+
+New regression coverage includes private-draft filtering in staff schedules/Today/calendars, atomic filtered publication, source/target version conflicts, all-or-nothing copying and destination DST handling, self-owned/versioned availability and overnight boundaries, paginated coverage, independent approval, revalidated claimant eligibility, archived claimants, withdrawal and shift-edit closure. Separate real SQLite connections race competing claims, publications and payroll preparation; exactly one command succeeds. Busy writers return conflicts, and per-account write limits preserve read access and access for coworkers.
+
+Payroll cases check precise local-midnight allocation, daily rounding after summing actual intervals, stale-source previews/approvals, pending-only preparation, protected/imported/voided/manual-discrepancy refusal, employee privacy and no duplicate preparation. A migration regression verifies that old shifts stay published and existing payroll remains unchanged with a null clock fingerprint. A store regression exercises prefixed routes, draft/availability isolation and distinct clock totals for identical staff IDs in different stores. Every new state-changing route requires CSRF.
+
+The browser run uses real form submissions across separate staff/admin sessions for availability, saving a draft, publication, coverage offer/request/approval, copied drafts, planned costs and confirmed clock-hour preparation; mobile overflow checks passed. One local screenshot attempt failed in Chromium's capture protocol before any application workflow and passed on rerun. Two new tests initially reused an already-signed-in client and assumed an internal version increment; separate account clients and a freshly rendered version fixed those test assumptions. The complete final suite above passed after those corrections.
+
+The Windows workload does not claim HTTPS or Redis. CI runs the same expanded workload against Linux Gunicorn, trusted disposable TLS and an actual shared Redis service. Read the current pull request checks for its observed result; the earlier Linux evidence below predates this upgrade. Finite loopback measurements are not hosted latency, 100 simultaneous active users, a long soak, external S3 delivery or production capacity.
+
+## Previous operations verification
+
 Local verification, including account security, recovery, production setup and the simplified schedule form, store workspaces, the emoji picker, and remembered sign-in, was completed on October 14, 2026, on Windows with Python 3.12 and a `.venv-verify` environment installed from `requirements-dev.txt`. Automated workflows used disposable databases and generated demo/test credentials. The user's synthetic local demo was backed up, its migration tested on a copy, then upgraded to `0006_operations` with writers stopped. Its existing records and account passwords were preserved. The scheduling simplification required no schema migration; the account/operations update adds `0006_operations` while preserving existing columns and passwords. Data fingerprints verified unchanged values in all tables across the hub and two store databases during the restart. The original `employee_mgmt.db` remained unchanged.
 
 | Check | Executed result |

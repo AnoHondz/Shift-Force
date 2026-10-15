@@ -55,6 +55,14 @@ Pictures are validated using Pillow and re-encoded as JPEG/PNG, with original me
 
 # Account recovery and production operations
 
+## Planning and clock-hour upgrade
+
+Drafts are filtered out of staff schedules, Today and personal calendars. Schedule-write roles gate copy/publication/coverage decisions, and payroll-review roles gate clock preparation. Employees cannot change another profile's availability, offer another person's shift, approve their own coverage transfer or obtain another employee's clock preview. New commands require CSRF, store-scoped sessions, account write limits and displayed versions/snapshots. SQLite writer serialization precedes command validation; exhausted writer contention returns a conflict. Batch changes, audits and notifications commit together.
+
+The coverage board intentionally shows shifts offered to coworkers in that store and pages its active results. It does not expose other stores or full employee rosters. Personal calendar snapshots are authenticated, scoped, escaped/folded and not cached; they are not public share links. Clock fingerprints are provenance hashes, not credentials or a substitute for source reconciliation. Manual payroll corrections clear the clock link explicitly, and changed source punches block later approval of sourced entries. See [PRODUCT_RESEARCH.md](PRODUCT_RESEARCH.md) for the accepted scope and remaining integrations.
+
+## Staff recovery controls
+
 Owners assign staff roles, revoke sign-ins, and create single-use, 30-minute password recovery links. A link is stored only as a SHA-256 hash, bound to that account's current authentication token and store database, and invalidated when a newer link is issued or credentials change. Staff identity must be verified before private handoff. Password recovery does not disable enabled MFA. Owner security checks use the hub credential and current hub token rather than the child's non-login bootstrap password; changing the hub credential or archiving its owner invalidates issued owner sessions in every location.
 
 Changing roles cannot grant platform/owner access, alter the actor's own role, or modify reserved administrator/owner accounts. Sensitive changes require a current password and recent MFA. Lost owner authenticator/recovery codes require trusted CLI recovery with a private identity-verification reference and retyped username; `reset-mfa` revokes all sign-ins and production access requires new enrollment. Keep that server access restricted and audited.

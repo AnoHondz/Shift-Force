@@ -30,7 +30,8 @@
       const dates = form.querySelector('[name="shift_date"]')
         ? [form.querySelector('[name="shift_date"]').value].filter(Boolean)
         : [...form.querySelectorAll('[name="shift_days"]:checked')].map(input => input.dataset.date);
-      document.getElementById('save-schedule').textContent = dates.length > 1 ? `Save ${dates.length} shifts` : 'Save shift';
+      const editingDraft = form.querySelector('[name="shift_id"]') && form.querySelector('button[name="publish"][value="0"]');
+      document.getElementById('save-schedule').textContent = editingDraft ? 'Publish shift' : (dates.length > 1 ? `Save ${dates.length} shifts` : 'Save shift');
       if (!dates.length) {
         preview.textContent = 'Choose at least one day.';
         end.setCustomValidity(preview.textContent); return;
@@ -67,8 +68,13 @@
     }
     form.addEventListener('input', update);
     form.addEventListener('change', update);
-    form.addEventListener('submit', () => {
-      const button = document.getElementById('save-schedule'); button.disabled = true; button.textContent = 'Saving…';
+    form.addEventListener('submit', event => {
+      const selectedMode = document.createElement('input');
+      selectedMode.type = 'hidden'; selectedMode.name = 'publish';
+      selectedMode.value = event.submitter?.value === '0' ? '0' : '1';
+      form.append(selectedMode);
+      form.querySelectorAll('button[type="submit"]').forEach(button => { button.disabled = true; });
+      if (event.submitter) event.submitter.textContent = 'Saving…';
     });
     document.querySelectorAll('[data-schedule-day]').forEach(button => {
       button.addEventListener('click', event => {

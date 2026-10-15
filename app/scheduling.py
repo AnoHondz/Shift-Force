@@ -3,7 +3,7 @@
 import re
 from datetime import date, datetime, time, timedelta, timezone
 
-from .models import LeaveRequest, ScheduledShift
+from .models import AvailabilityProfile, LeaveRequest, ScheduledShift
 
 
 def local_datetime(value, zone):
@@ -100,6 +100,11 @@ def repeat_intervals(start, end, values, zone, parse_time, editing=False):
 
 
 def validate_availability(employee_id, start, end, zone, exclude_id=None):
+    from .planning import availability_conflict
+
+    conflict = availability_conflict(employee_id, start, end, zone)
+    if conflict:
+        raise ValueError(conflict)
     overlap = ScheduledShift.query.filter(
         ScheduledShift.employee_id == employee_id,
         ScheduledShift.cancelled.is_(False),
@@ -126,6 +131,16 @@ def validate_availability(employee_id, start, end, zone, exclude_id=None):
 
 
 def week_calendar(shifts, leaves, week, today, zone):
+    profiles = (
+        {
+            profile.employee_id: profile
+            for profile in AvailabilityProfile.query.filter(
+                AvailabilityProfile.employee_id.in_({shift.employee_id for shift in shifts})
+            ).all()
+        }
+        if shifts
+        else {}
+    )
     calendar = []
     total_seconds = 0
     for offset in range(7):
@@ -152,6 +167,7 @@ def week_calendar(shifts, leaves, week, today, zone):
                     end_day=local_end.strftime("%a"),
                     hours=hours,
                     leave_conflict=shift.employee_id in leave_ids,
+                    availability_conflict=availability_conflict_for_card(shift, zone, profiles),
                 )
             )
         total_seconds += seconds
@@ -165,3 +181,16 @@ def week_calendar(shifts, leaves, week, today, zone):
             )
         )
     return calendar, total_seconds / 3600
+
+
+def availability_conflict_for_card(shift, zone, profiles):
+    from .planning import availability_conflict
+
+    profile = profiles.get(shift.employee_id)
+    return (
+        availability_conflict(
+            shift.employee_id, shift.starts_at, shift.ends_at, zone, profile=profile
+        )
+        if profile
+        else None
+    )

@@ -256,6 +256,7 @@ class PayrollRecord(db.Model):
     rate_snapshot = db.Column(db.Numeric(12, 2), nullable=False)
     multiplier_snapshot = db.Column(db.Numeric(4, 2), nullable=False)
     legacy_import = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    attendance_fingerprint = db.Column(db.String(64), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(32), nullable=False, default="Pending")
     reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -432,12 +433,56 @@ class ScheduledShift(db.Model):
     ends_at = db.Column(db.DateTime, nullable=False)
     notes = db.Column(db.String(255), nullable=False, default="")
     cancelled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    published = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
     version_id = db.Column(db.Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version_id}
     employee = db.relationship("Employee", lazy="joined")
     __table_args__ = (
         db.CheckConstraint("ends_at > starts_at", name="ck_schedule_times"),
         db.Index("ix_schedule_employee_start", "employee_id", "starts_at"),
+    )
+
+
+class AvailabilityProfile(db.Model):
+    __tablename__ = "availability_profiles"
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, unique=True)
+    rules = db.Column(db.Text, nullable=False)
+    version_id = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    __mapper_args__ = {"version_id_col": version_id}
+    employee = db.relationship("Employee", lazy="joined")
+
+
+class ShiftCoverage(db.Model):
+    __tablename__ = "shift_coverage"
+    id = db.Column(db.Integer, primary_key=True)
+    shift_id = db.Column(db.Integer, db.ForeignKey("scheduled_shifts.id"), nullable=False)
+    offered_by_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    claimed_by_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    shift_version = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="Open", server_default="Open")
+    note = db.Column(db.String(255), nullable=False, default="")
+    version_id = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    __mapper_args__ = {"version_id_col": version_id}
+    shift = db.relationship("ScheduledShift", lazy="joined")
+    offered_by = db.relationship("Employee", foreign_keys=[offered_by_id], lazy="joined")
+    claimed_by = db.relationship("Employee", foreign_keys=[claimed_by_id], lazy="joined")
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('Open','Pending','Approved','Cancelled')", name="ck_coverage_status"
+        ),
+        db.CheckConstraint(
+            "claimed_by_id IS NULL OR claimed_by_id != offered_by_id", name="ck_coverage_people"
+        ),
+        db.Index(
+            "uq_coverage_active_shift",
+            "shift_id",
+            unique=True,
+            sqlite_where=db.text("status IN ('Open','Pending')"),
+        ),
     )
 
 
@@ -533,6 +578,14 @@ class AuditLog(db.Model):
         "schedule_created",
         "schedule_updated",
         "schedule_cancelled",
+        "schedule_published",
+        "schedule_copied",
+        "availability_updated",
+        "coverage_offered",
+        "coverage_claimed",
+        "coverage_reviewed",
+        "coverage_cancelled",
+        "attendance_timesheets_prepared",
         "chat_channel_created",
         "store_created",
         "store_opened",

@@ -23,6 +23,21 @@ def minimum_wage(work_date):
 
 
 def require_payroll_approval(record):
+    if record.attendance_fingerprint:
+        from zoneinfo import ZoneInfo
+
+        from .time_review import punch_signature
+
+        current = punch_signature(
+            record.employee_id,
+            Workweek.containing(record.work_date).start,
+            ZoneInfo(current_app.config.get("WORKFORCE_TIMEZONE", "UTC")),
+        )
+        if current != record.attendance_fingerprint:
+            abort(
+                409,
+                description="Clock records changed after these hours were prepared. Reconcile clock hours before approval.",
+            )
     if not current_app.config.get(
         "REQUIRE_PAYROLL_REVIEW", current_app.config.get("APP_ENV") == "production"
     ):

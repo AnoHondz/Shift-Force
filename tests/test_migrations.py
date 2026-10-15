@@ -26,6 +26,50 @@ def test_factory_does_not_create_tables(tmp_path):
         assert inspect(db.engine).get_table_names() == []
 
 
+def test_planning_upgrade_preserves_published_shifts_and_payroll_source_values(tmp_path):
+    app = migration_app(tmp_path)
+    with app.app_context():
+        upgrade(revision="0006_operations")
+        connection = db.session
+        connection.execute(
+            text(
+                "INSERT INTO employees (id,first_name,last_name,email,job_title,schedule,hourly_rate,overtime_multiplier,date_hired,archived) VALUES (1,'Existing','Colleague','existing@example.com','Staff','Weekdays',20,1.5,'2026-10-01',0)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scheduled_shifts (id,employee_id,starts_at,ends_at,notes,cancelled,version_id) VALUES (1,1,'2026-10-19 09:00:00','2026-10-19 17:00:00','Keep this published',0,3)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO payroll_records (id,employee_id,work_date,hours_worked,regular_hours,overtime_hours,total_pay,rate_snapshot,multiplier_snapshot,legacy_import,notes,status,version_id) VALUES (1,1,'2026-10-05',8,8,0,160,20,1.5,0,'Retain manual origin','Approved',4)"
+            )
+        )
+        connection.commit()
+        before = {
+            table: connection.execute(text(f'SELECT * FROM "{table}" ORDER BY id')).all()
+            for table in ["employees", "scheduled_shifts", "payroll_records"]
+        }
+        columns = {
+            table: [column["name"] for column in inspect(db.engine).get_columns(table)]
+            for table in before
+        }
+        upgrade()
+        for table in before:
+            selected = ",".join('"' + column + '"' for column in columns[table])
+            assert (
+                connection.execute(text(f'SELECT {selected} FROM "{table}" ORDER BY id')).all()
+                == before[table]
+            )
+        assert connection.execute(text("SELECT published FROM scheduled_shifts")).scalar() == 1
+        assert (
+            connection.execute(text("SELECT attendance_fingerprint FROM payroll_records")).scalar()
+            is None
+        )
+        assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
+
+
 def test_store_registry_upgrade_preserves_accounts_and_existing_references(tmp_path):
     from app.models import Notification, Role, User
 
@@ -86,7 +130,7 @@ def test_fresh_migration_and_second_upgrade_are_idempotent(tmp_path):
         upgrade()
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0006_operations"
+            == "0007_planning"
         )
 
 
@@ -215,5 +259,5 @@ def test_migration_downgrade_refuses_destructive_changes(tmp_path):
             downgrade(revision="0001_baseline")
         assert (
             db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            == "0006_operations"
+            == "0007_planning"
         )

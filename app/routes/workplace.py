@@ -30,12 +30,14 @@ from ..models import (
     LeaveRequest,
     Role,
     ScheduledShift,
+    ShiftCoverage,
     TeamChannel,
     TeamMessage,
     create_audit_log,
     create_notification,
     utcnow,
 )
+from ..planning import close_coverage, labor_projection, roster_signature
 from ..scheduling import (
     day_boundary,
     local_datetime,
@@ -137,6 +139,7 @@ def render_today():
             ScheduledShift.query.filter(
                 ScheduledShift.employee_id == employee.id,
                 ScheduledShift.cancelled.is_(False),
+                ScheduledShift.published.is_(True),
                 ScheduledShift.ends_at >= now,
             )
             .order_by(ScheduledShift.starts_at)
@@ -184,6 +187,8 @@ def schedule_context(week, editing=None, error=None):
         ScheduledShift.starts_at < last,
         ScheduledShift.cancelled.is_(False),
     )
+    if not current_user.has_admin_access():
+        shifts_query = shifts_query.filter(ScheduledShift.published.is_(True))
     leaves_query = LeaveRequest.query.filter(
         LeaveRequest.status == "Approved",
         LeaveRequest.start_date <= week + timedelta(days=6),
@@ -200,6 +205,17 @@ def schedule_context(week, editing=None, error=None):
     shifts = shifts_query.order_by(ScheduledShift.starts_at, ScheduledShift.id).all()
     leaves = leaves_query.order_by(LeaveRequest.employee_id, LeaveRequest.start_date).all()
     calendar, hours = week_calendar(shifts, leaves, week, today, zone)
+    drafts = [shift for shift in shifts if not shift.published]
+    source = []
+    if current_user.role in Role.LEAVE_REVIEW:
+        query = ScheduledShift.query.filter(
+            ScheduledShift.starts_at >= day_boundary(week - timedelta(days=7), zone),
+            ScheduledShift.starts_at < first,
+            ScheduledShift.cancelled.is_(False),
+        )
+        if staff_id:
+            query = query.filter_by(employee_id=staff_id)
+        source = query.order_by(ScheduledShift.id).all()
     default_day = today if week <= today < week + timedelta(days=7) else week
     if request.args.get("on"):
         try:
@@ -261,6 +277,23 @@ def schedule_context(week, editing=None, error=None):
         original_overnight=bool(
             editing and local_input(editing.ends_at)[:10] > local_input(editing.starts_at)[:10]
         ),
+        draft_count=len(drafts),
+        draft_token=roster_signature(drafts),
+        copy_token=roster_signature(source) + ":" + roster_signature(shifts),
+        source_count=len(source),
+        projection=labor_projection(shifts, week, zone)
+        if current_user.has_admin_access()
+        else None,
+        now=utcnow(),
+        active_offer_shift_ids={
+            offer.shift_id
+            for offer in ShiftCoverage.query.filter(
+                ShiftCoverage.shift_id.in_([shift.id for shift in shifts]),
+                ShiftCoverage.status.in_(["Open", "Pending"]),
+            ).all()
+        }
+        if shifts
+        else set(),
     )
 
 
@@ -269,6 +302,9 @@ def schedule_context(week, editing=None, error=None):
 def schedule():
     if request.method == "POST":
         require_manager(write=True)
+        from ..time_review import serialize_command
+
+        serialize_command()
     try:
         week = selected_week(
             request.values.get("week"),
@@ -288,6 +324,13 @@ def schedule():
                     raise ValueError(
                         "This shift was cancelled. Refresh the schedule before editing."
                     )
+            mode = request.form.get("publish", "1")
+            if mode not in {"0", "1"}:
+                raise ValueError("Choose save draft or publish.")
+            if record and record.published and mode == "0":
+                raise ValueError(
+                    "Published shifts stay visible. Save changes or create a separate draft."
+                )
             employee = selected_employee()
             if "simple_schedule" in request.form:
                 intervals = simple_intervals(
@@ -347,6 +390,7 @@ def schedule():
                 "schedule.html", **schedule_context(week, record, message)
             ), status
         old_employee = record.employee if record else None
+        was_published = record.published if record else False
         old_interval = (
             (record.employee_id, record.starts_at, record.ends_at, record.notes) if record else None
         )
@@ -366,6 +410,7 @@ def schedule():
                 shift_end,
                 notes,
             )
+            shift.published = mode == "1"
             db.session.flush()
             create_audit_log(
                 current_user,
@@ -374,7 +419,9 @@ def schedule():
                 str(shift.id),
                 f"Before: {before}. After: {employee.id}: {shift_start} to {shift_end}; {notes} (UTC).",
             )
-        if old_interval != (employee.id, start, end, notes):
+        if record and old_interval != (employee.id, start, end, notes):
+            close_coverage(record, "The shift changed. Request coverage again if needed.")
+        if mode == "1" and (old_interval != (employee.id, start, end, notes) or not was_published):
             zone = workplace_zone()
             labels = [
                 f"{local_datetime(first, zone).strftime('%a, %b %d %I:%M %p')} to {local_datetime(last, zone).strftime('%a, %b %d %I:%M %p')}"
@@ -383,12 +430,17 @@ def schedule():
             if employee.user:
                 create_notification(
                     employee.user,
-                    "Shift changed" if record else "New shifts posted",
+                    "Shift changed" if was_published else "New shifts posted",
                     "; ".join(labels) + f" ({zone}). Check your schedule.",
                     "/schedule?week=" + monday(local_datetime(start, zone).date()).isoformat(),
                     "schedule",
                 )
-            if old_employee and old_employee.id != employee.id and old_employee.user:
+            if (
+                was_published
+                and old_employee
+                and old_employee.id != employee.id
+                and old_employee.user
+            ):
                 create_notification(
                     old_employee.user,
                     "Shift reassigned",
@@ -399,7 +451,9 @@ def schedule():
                 )
         db.session.commit()
         flash(
-            "Schedule saved." if len(intervals) == 1 else f"{len(intervals)} shifts saved.",
+            ("Draft saved. Staff cannot see it yet." if mode == "0" else "Schedule saved.")
+            if len(intervals) == 1
+            else f"{len(intervals)} {'drafts' if mode == '0' else 'shifts'} saved.",
             "success",
         )
         saved_week = monday(local_datetime(start, workplace_zone()).date())
@@ -430,6 +484,7 @@ def cancel_shift(shift_id):
     if record.cancelled:
         abort(400, description="This shift has already been cancelled.")
     record.cancelled = True
+    close_coverage(record, "The scheduled shift was cancelled.")
     create_audit_log(
         current_user,
         "schedule_cancelled",
@@ -437,7 +492,7 @@ def cancel_shift(shift_id):
         str(record.id),
         f"Cancelled {record.employee.full_name()}: {record.starts_at} to {record.ends_at} (UTC).",
     )
-    if record.employee.user:
+    if record.published and record.employee.user:
         create_notification(
             record.employee.user,
             "Shift cancelled",

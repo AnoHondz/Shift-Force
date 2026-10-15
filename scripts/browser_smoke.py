@@ -20,6 +20,7 @@ from app import create_app
 from app.extensions import db
 from app.models import Attendance, Employee, PayrollRecord, TeamChannel, User, utcnow
 from scripts.account_browser import verify_account_workflows
+from scripts.planning_browser import verify_planning_upgrade
 from scripts.schedule_browser import verify_schedule_builder
 from scripts.store_browser import verify_stores
 
@@ -476,6 +477,9 @@ def main():
                 )
                 verify_schedule_builder(
                     page, browser, origin, app, credentials, completed, capture, browser_errors
+                )
+                verify_planning_upgrade(
+                    page, browser, origin, app, completed, capture, browser_errors
                 )
                 verify_stores(
                     page,

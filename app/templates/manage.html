@@ -4,6 +4,8 @@
 <div class="manage-grid">
   <a class="surface-card manage-tile" href="{{ url_for('workplace.punches') }}"><i class="bi bi-clock-history"></i><h2 class="h4">Punches</h2><p>Fix missed clock-ins and clock-outs.</p></a>
   <a class="surface-card manage-tile" href="{{ url_for('workplace.schedule') }}"><i class="bi bi-calendar-week"></i><h2 class="h4">Schedule</h2><p>Add, change, or cancel shifts.</p></a>
+  <a class="surface-card manage-tile" href="{{ url_for('planning.coverage') }}"><i class="bi bi-arrow-left-right"></i><h2 class="h4">Shift coverage</h2><p>Review coworker coverage requests.</p></a>
+  {% if current_user.role in Role.PAYROLL_REVIEW %}<a class="surface-card manage-tile" href="{{ url_for('time_review.clock_hours') }}"><i class="bi bi-clipboard-check"></i><h2 class="h4">Clock hours</h2><p>Check recorded work and prepare timesheets.</p></a>{% endif %}
   <a class="surface-card manage-tile" href="{{ url_for('employees.employee_directory') }}"><i class="bi bi-people"></i><h2 class="h4">People</h2><p>View your team and employee details.</p></a>
   {% if current_user.role in [Role.ADMIN, Role.EXECUTIVE] %}<a class="surface-card manage-tile" href="{{ url_for('accounts.staff') }}"><i class="bi bi-person-lock"></i><h2 class="h4">Staff access</h2><p>Choose managers, help with passwords, or remove sign-ins.</p></a>{% endif %}
 </div>

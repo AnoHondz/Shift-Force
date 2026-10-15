@@ -2,6 +2,8 @@
 
 A full-stack workforce application built with Python and Flask. Today keeps the shift clock and upcoming schedule together. Team chat has a Discord-style layout with separate channels, coworker conversations, and picture sharing. Authorized staff use Manage workplace to correct punches, plan shifts, and manage employee records.
 
+The researched planning upgrade adds private drafts, week copying, employee availability, approved shift coverage, planned labor estimates, personal calendar downloads and traceable clock-to-timesheet review. The [product research and decisions](docs/PRODUCT_RESEARCH.md) compare nine relevant products and explain the scope and engineering tradeoffs.
+
 Built by **Anotida Hondonga** as a software engineering portfolio project. The existing Flask/Jinja architecture is preserved and strengthened with explicit migrations, tested business rules, and safer administration.
 
 **Status:** verified local demo and portfolio build. Production use requires credential rotation, reconciliation of imported payroll, deployment review, and jurisdiction-specific payroll validation. No public deployment is included.
@@ -24,8 +26,13 @@ Small teams often track employee details, hours, attendance, and leave in separa
 - Production Blueprint with a durable volume, shared Key Value rate limits, two Gunicorn workers, health/readiness checks, encrypted coordinated backups and verified off-host restore drills.
 - Optional seven-day remembered sign-in on this device; signing out removes its cookie, while unchecked sign-in uses a browser session.
 - Separate store workspaces with location sign-in links, private staff/schedules/chats/pictures, and an owner account that can switch across its locations.
-- Simple store search by business or street and manager-generated, seven-day invitations for staff to join the correct location.
+- Simple store search by business or street and seven-day staff invitations issued by administrators, executives or HR for the correct location.
 - Simple schedule form: choose a person, tap one or more days, and set the hours once. Includes a weekly calendar, staff filtering, hour totals, overnight shifts, and a duration preview in the store's time zone.
+- Private schedule drafts with atomic filtered publication, source/target snapshot checks and copy-previous-week tools that preserve local clock times across daylight-saving changes.
+- Self-service recurring availability, conflicts flagged on existing shifts, and availability/leave/overlap validation before new assignments or coverage approval.
+- Coworker coverage offers and requests with independent manager approval, stale-request protection, private notices and retained assignment/audit history.
+- Planning-only Decimal labor estimates and weekly overtime indicators, plus authenticated personal iCalendar downloads.
+- Clock-hours review compares planned, actual and payroll hours. Confirmed preparation creates pending daily timesheets, splits overnight punches at local midnight, retains source fingerprints and blocks approval after source changes.
 - Approved-time-off and overlapping-shift checks, preserved invalid drafts, versioned edits, confirmed cancellation that retains history, and employee visibility limited to their own shifts. Schedule creation, edits, reassignment, and cancellation send private in-app notices, with a visible notification button.
 - Manager punch corrections and entirely missed shifts, with required reasons, before/after audit entries, overlap checks, and stale-edit protection.
 - Employee directory with search, department/role/status filters, profiles, editing, and archival that preserves records.
@@ -58,7 +65,7 @@ flowchart LR
 
 ## Database design
 
-Fifteen domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, chat channels, team messages, chat attachments, leave requests, notifications, audit logs, the hub's store registry, single-use account recovery links, and operator policy reviews. Each store has its own migrated SQLite database; the hub registry records its owner, display name, location, time zone, and generated storage key.
+Seventeen domain tables model departments, employees, users, payroll records, attendance records, scheduled shifts, recurring availability, shift coverage, chat channels, team messages, chat attachments, leave requests, notifications, audit logs, the hub's store registry, single-use account recovery links, and operator policy reviews. Each store has its own migrated SQLite database; the hub registry records its owner, display name, location, time zone, and generated storage key.
 
 ```mermaid
 erDiagram
@@ -67,6 +74,9 @@ erDiagram
     EMPLOYEE ||--o{ PAYROLL_RECORD : submits
     EMPLOYEE ||--o{ ATTENDANCE : clocks
     EMPLOYEE ||--o{ SCHEDULED_SHIFT : scheduled_for
+    EMPLOYEE ||--o| AVAILABILITY_PROFILE : supplies
+    EMPLOYEE ||--o{ SHIFT_COVERAGE : offers_or_requests
+    SCHEDULED_SHIFT ||--o{ SHIFT_COVERAGE : retains_history
     EMPLOYEE ||--o{ LEAVE_REQUEST : requests
     USER ||--o{ NOTIFICATION : receives
     USER ||--o{ TEAM_MESSAGE : sends
@@ -81,11 +91,15 @@ Foreign keys are enforced on SQLite connections. Unique daily payroll entries an
 
 ## Authentication and permissions
 
-Workplace registration creates an employee role. Inside a store, an invitation is required and attaches the account to the manager's existing employee profile. `/owner/signup` creates a restricted hub owner who can create/open only their own stores; it cannot grant access to the legacy hub workplace. Both forms ignore submitted role fields. Public registration is disabled by default in production; owner registration can be enabled with `PUBLIC_STORE_OWNER_REGISTRATION=true`. Trusted operators can assign the hub `owner` role with `flask set-role`. Store administrators and owners use **Manage workplace ? Staff access** to assign employee, manager, HR, or payroll access. Platform administrator/executive/owner assignments remain trusted CLI actions.
+Workplace registration creates an employee role. Inside a store, an invitation is required and attaches the account to an existing employee profile. `/owner/signup` creates a restricted hub owner who can create/open only their own stores; it cannot grant access to the legacy hub workplace. Both forms ignore submitted role fields. Public registration is disabled by default in production; owner registration can be enabled with `PUBLIC_STORE_OWNER_REGISTRATION=true`. Trusted operators can assign the hub `owner` role with `flask set-role`. Store administrators and owners use **Manage workplace → Staff access** to assign employee, manager, HR, or payroll access. Platform administrator/executive/owner assignments remain trusted CLI actions.
 
 | Action | Employee | Manager | HR | Payroll | Admin / Executive |
 |---|---|---|---|---|---|
 | Personal profile, leave, inbox | Own | Own | Own | Own | Own |
+| Availability, coverage requests, calendar | Own | Own | Own | Own | Own |
+| Draft/copy/publish schedule | — | Yes | Yes | — | Yes |
+| Approve another person's coverage | — | Yes | Yes | — | Yes |
+| Prepare pending clock-derived payroll | — | Yes | — | Yes | Yes |
 | Workforce/report/API read access | Own operations; team directory | Organization | Organization | Organization | Organization |
 | Create/edit employee records | — | — | Yes | — | Yes |
 | Archive employee records | — | — | — | — | Yes |
@@ -177,7 +191,7 @@ The workweek runs **Monday through Sunday**. The first 40 hours are regular hour
 
 Money uses `Decimal` with half-up cent rounding and submitted compensation snapshots. Reports exclude rejected/voided entries; pending/reviewed entries remain estimates. Payroll review/void controls and leave updates require the displayed optimistic version, preventing old forms from approving or overwriting newer corrections. Approval and imported-record status are included in payroll exports.
 
-Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries; daily timesheet totals remain a separate review workflow. Overnight shifts must be allocated to work dates when submitting timesheets. Managers, HR, administrators, and executives can reconcile punches through Manage workplace. Trusted server operators also have `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
+Attendance is stored in UTC and displayed in the configured timezone. Shifts may last at most 24 hours. Attendance does not automatically create payroll entries. Authorized payroll reviewers can open **Review clock hours**, compare a selected week, resolve open punches or manual discrepancies, confirm payable work/breaks, then prepare pending timesheets. Overnight punches split at local midnight; daily hours round after summing intervals. Approved/imported/voided records are protected, and later punch corrections flag sourced entries and block approval until reconciled. Manual totals remain available for a deliberate correction. Managers, HR, administrators, and executives can reconcile punches through Manage workplace. Trusted server operators also have `correct-attendance` with offset-aware timestamps; see [business rules](docs/BUSINESS_RULES.md).
 
 In production, wage approval requires an owner-recorded **Payroll readiness** review with an evidence reference for the supported Virginia policy: 2026-2028 work dates, adult hourly nonexempt staff working at one location, one rate, Monday-Sunday weekly overtime, and no tips, bonuses, deductions, taxes, or payment processing. Imported and mixed-rate workweeks remain blocked. Cross-location combined overtime is handled by the employer's external payroll process; separate store databases do not calculate it. Eligibility is an owner attestation that must remain current; the app does not classify staff, detect cross-location employment or expire the review automatically. These controls record human review and do not certify legal compliance.
 
@@ -202,7 +216,7 @@ On the sign-in page, select **Remember me on this device** to return without sig
 
 ## Screenshots
 
-Captured from the running application with synthetic records on October 13, 2026:
+Captured from the running application with synthetic records; the researched planning upgrade was captured on October 15, 2026:
 
 | Screen | Preview |
 |---|---|
@@ -217,7 +231,10 @@ Captured from the running application with synthetic records on October 13, 2026
 | Attendance and leave | [Attendance](docs/screenshots/attendance.png) · [Leave](docs/screenshots/leave.png) |
 | Notifications, reporting, audit | [Inbox](docs/screenshots/notifications.png) · [Reports](docs/screenshots/reports.png) · [Audit](docs/screenshots/audit.png) |
 | Mobile | [Dashboard](docs/screenshots/dashboard-mobile.png) · [Directory](docs/screenshots/employees-mobile.png) · [Payroll](docs/screenshots/payroll-mobile.png) |
-| Staff access and security | [Staff access](docs/screenshots/staff-access.png) ? [Account security](docs/screenshots/account-security.png) ? [Mobile access](docs/screenshots/staff-access-mobile.png) ? [Mobile security](docs/screenshots/account-security-mobile.png) |
+| Staff access and security | [Staff access](docs/screenshots/staff-access.png) · [Account security](docs/screenshots/account-security.png) · [Mobile access](docs/screenshots/staff-access-mobile.png) · [Mobile security](docs/screenshots/account-security-mobile.png) |
+| Drafts and week tools | [Private drafts](docs/screenshots/schedule-drafts.png) · [Week tools](docs/screenshots/schedule-week-tools.png) · [Mobile](docs/screenshots/schedule-week-tools-mobile.png) |
+| Availability and coverage | [Availability](docs/screenshots/availability.png) · [Coverage requests](docs/screenshots/coverage-requests.png) · [Mobile availability](docs/screenshots/availability-mobile.png) |
+| Clock-hours review | [Desktop](docs/screenshots/clock-hours-review.png) · [Mobile](docs/screenshots/clock-hours-review-mobile.png) |
 | Mobile workplace tools | [Schedule](docs/screenshots/schedule-mobile.png) · [Chat](docs/screenshots/team-chat-mobile.png) · [Manage workplace](docs/screenshots/manage-workplace-mobile.png) |
 
 Regenerate only from a successful run using `python -m scripts.browser_smoke --screenshots`.
@@ -240,7 +257,7 @@ Known limitations: payroll estimates exclude taxes, deductions, benefits, holida
 
 ## Future improvements
 
-Department-scoped manager permissions; SSO and email verification; explicit reconciliation tooling for imported weekly payroll; PostgreSQL migrations, hosted capacity and long-duration testing; nonce-based CSP and extracted scripts; broader payroll policies and cross-location overtime; automated attendance-to-timesheet allocation with approved timezone rules.
+Department-scoped manager permissions; SSO and email verification; reviewed pay-period locking; provider-specific payroll integrations; imported weekly-payroll reconciliation; PostgreSQL migration and hosted/soak testing; nonce-based CSP; broader payroll policies and cross-location overtime; staffing requirements and explained schedule suggestions; private/threaded chat. The [research roadmap](docs/PRODUCT_RESEARCH.md#further-expansion-in-dependency-order) sets out dependencies and boundaries.
 
 ## Troubleshooting
 

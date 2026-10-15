@@ -60,6 +60,68 @@ def add_staff(child, name="Store Employee", username=None):
         return employee.id
 
 
+def test_planning_availability_and_clock_review_stay_inside_the_selected_store(
+    app, client, locations
+):
+    from datetime import datetime, timezone
+    from datetime import time as clock_time
+    from zoneinfo import ZoneInfo
+
+    from app.models import Attendance, AvailabilityProfile, ScheduledShift
+    from app.scheduling import monday
+
+    broad, cox = locations
+    broad_id = add_staff(broad, "Broad Coworker", "crew")
+    cox_id = add_staff(cox, "Cox Coworker", "crew")
+    past = monday(datetime.now(timezone.utc).date()) - timedelta(days=7)
+    future = past + timedelta(days=21)
+    for child, identity, hours in [(broad, broad_id, 2), (cox, cox_id, 4)]:
+        with child.app_context():
+            start = (
+                datetime.combine(past, clock_time(9), ZoneInfo("America/New_York"))
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            punch = Attendance(employee_id=identity, date=past, clock_in_at=start)
+            punch.complete_shift(start + timedelta(hours=hours))
+            db.session.add(punch)
+            db.session.commit()
+    a, b = "/s/mcdonalds-broad-street", "/s/mcdonalds-cox-street"
+    client.post("/stores/mcdonalds-broad-street/open")
+    response = client.post(
+        a + "/schedule",
+        data=dict(
+            employee_id=broad_id,
+            starts_at=future.isoformat() + "T09:00",
+            ends_at=future.isoformat() + "T17:00",
+            publish="0",
+            notes="Broad private draft",
+        ),
+    )
+    assert response.status_code == 302 and response.location.startswith(a + "/schedule")
+    preview = client.get(
+        a + "/payroll/clock-hours", query_string=dict(employee_id=broad_id, week=past.isoformat())
+    )
+    assert b"2.00 recorded hours" in preview.data and b"4.00 recorded hours" not in preview.data
+    assert (a + "/schedule/publish").encode() in client.get(
+        a + "/schedule?week=" + future.isoformat()
+    ).data
+    client.post("/stores/mcdonalds-cox-street/open")
+    assert b"Broad private draft" not in client.get(b + "/schedule?week=" + future.isoformat()).data
+    staff = app.test_client()
+    staff.post(a + "/login", data=dict(username="crew", password=TEST_PASSWORD))
+    values = {f"mode_{number}": "any" for number in range(7)}
+    values.update(version_id="0", mode_0="off")
+    assert staff.post(a + "/schedule/availability", data=values).status_code == 302
+    assert b"Broad private draft" not in staff.get(a + "/schedule?week=" + future.isoformat()).data
+    assert staff.get(b + "/schedule/coverage").status_code == 302
+    with broad.app_context():
+        assert AvailabilityProfile.query.one().employee_id == broad_id
+        assert not ScheduledShift.query.one().published
+    with cox.app_context():
+        assert AvailabilityProfile.query.count() == ScheduledShift.query.count() == 0
+
+
 def test_owner_can_switch_between_private_locations(app, client, locations):
     broad, cox = locations
     add_staff(broad, "Broad Coworker", "crew")

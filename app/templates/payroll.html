@@ -3,6 +3,7 @@
 {% block title %}{{ page_title }}{% endblock %}
 {% block content %}
 {% call ui.page_header('Hours and Payroll', 'Review, approve, and export timesheets.' if admin_view else 'Log hours and monitor pay estimates.') %}
+  <a class="btn btn-primary" href="{{ url_for('time_review.clock_hours', employee_id=selected_employee) }}">Review clock hours</a>
   {% if admin_view %}
     <a class="btn btn-ghost" href="{{ url_for('reports.export_csv', period='weekly') }}">Export CSV</a>
   {% endif %}
@@ -78,7 +79,7 @@
               <td>{{ record.hours_worked|hours }}</td>
               <td>{{ record.overtime_hours|hours }}</td>
               <td>{{ record.total_pay|currency }}</td>
-              <td><span class="status-badge status-{{ record.status|lower }}">{{ record.status }}</span></td>
+              <td><span class="status-badge status-{{ record.status|lower }}">{{ record.status }}</span>{% if record.attendance_fingerprint %}<span class="small d-block">From clock records</span>{% endif %}{% if record.id in punch_stale %}<span class="schedule-warning">Clock records changed · reconcile</span>{% endif %}</td>
               <td class="text-end">
                 {% if admin_view and current_user.role in Role.PAYROLL_REVIEW and not record.legacy_import and record.employee_id != current_user.employee_id %}
                   <div class="action-cluster">
